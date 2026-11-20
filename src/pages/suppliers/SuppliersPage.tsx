@@ -6,8 +6,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Supplier } from '../../types/index.js';
 import { formatINR } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const SuppliersPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +42,7 @@ export const SuppliersPage: React.FC = () => {
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,46 +99,54 @@ export const SuppliersPage: React.FC = () => {
 
       {/* Suppliers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map((s) => (
-          <div
-            key={s.id}
-            className="bg-white rounded-xl border border-brand-border shadow-card p-5 space-y-4 hover:shadow-card-hover transition-all"
-          >
-            <div>
-              <h3 className="font-bold text-sm text-slate-900">{s.name}</h3>
-              <div className="text-[11px] text-slate-400 mt-0.5">
-                Contact: {s.contactPerson || 'Procurement Team'}
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg text-xs space-y-1.5 border border-slate-100">
-              <div className="flex items-center justify-between text-slate-600">
-                <span>GSTIN:</span>
-                <span className="font-semibold text-slate-800">{s.gstin || 'Unregistered'}</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-600">
-                <span>Payment Terms:</span>
-                <span className="font-semibold text-slate-800">{s.paymentTermsDays} Days</span>
-              </div>
-            </div>
-
-            {/* Financial Summary */}
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium">Total Billed</div>
-                <div className="font-bold text-slate-900">
-                  {s.financialSummary?.totalBilledFormatted || '₹0.00'}
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] text-purple-600 font-medium">Outstanding Payable</div>
-                <div className="font-bold text-purple-700">
-                  {s.financialSummary?.outstandingFormatted || '₹0.00'}
-                </div>
-              </div>
-            </div>
+        {filtered.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+            <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="font-semibold text-slate-600">No supplier profiles recorded</p>
+            <p className="text-[11px] text-slate-400 mt-1">Add your vendors and suppliers to track procurement payables.</p>
           </div>
-        ))}
+        ) : (
+          filtered.map((s) => (
+            <div
+              key={s.id}
+              className="bg-white rounded-xl border border-brand-border shadow-card p-5 space-y-4 hover:shadow-card-hover transition-all"
+            >
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">{s.name}</h3>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Contact: {s.contactPerson || 'Procurement Team'}
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg text-xs space-y-1.5 border border-slate-100">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>GSTIN:</span>
+                  <span className="font-semibold text-slate-800">{s.gstin || 'Unregistered'}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Payment Terms:</span>
+                  <span className="font-semibold text-slate-800">{s.paymentTermsDays} Days</span>
+                </div>
+              </div>
+
+              {/* Financial Summary */}
+              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-medium">Total Billed</div>
+                  <div className="font-bold text-slate-900">
+                    {s.financialSummary?.totalBilledFormatted || '₹0.00'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-purple-600 font-medium">Outstanding Payable</div>
+                  <div className="font-bold text-purple-700">
+                    {s.financialSummary?.outstandingFormatted || '₹0.00'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Add Supplier Modal */}

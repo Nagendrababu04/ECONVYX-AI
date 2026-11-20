@@ -16,6 +16,26 @@ router.get('/', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   return res.json({ workspaces });
 });
 
+// GET /api/workspaces/badge-counts — Dynamic badge counters scoped strictly to active workspace
+router.get('/badge-counts', tenantAuthMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.workspaceId!;
+  const verificationCases = db.getVerificationCases(workspaceId);
+  const bankTransactions = db.getBankTransactions(workspaceId);
+
+  const flagCount = verificationCases.filter(
+    (v) => v.status === 'mismatch' || v.status === 'needs_review'
+  ).length;
+
+  const suggestedCount = bankTransactions.filter(
+    (t) => t.reconciliationStatus === 'suggested'
+  ).length;
+
+  return res.json({
+    verificationFlagsCount: flagCount,
+    suggestedMatchesCount: suggestedCount,
+  });
+});
+
 // POST /api/workspaces/onboarding — Complete workspace creation after registration
 router.post('/onboarding', (req: AuthenticatedRequest, res: Response) => {
   const authHeader = req.headers.authorization;
@@ -74,6 +94,9 @@ router.post('/onboarding', (req: AuthenticatedRequest, res: Response) => {
     defaultPaymentTermsDays: Number(defaultPaymentTermsDays) || 30,
     timezone: timezone || 'Asia/Kolkata',
     isDemo: false,
+    openingBalancePaise: req.body.openingBalancePaise !== undefined
+      ? Number(req.body.openingBalancePaise)
+      : (req.body.openingBalanceRupees !== undefined ? Math.round(Number(req.body.openingBalanceRupees) * 100) : undefined),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

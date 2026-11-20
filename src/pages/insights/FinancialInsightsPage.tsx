@@ -13,8 +13,10 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { formatINR } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const FinancialInsightsPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,7 +33,7 @@ export const FinancialInsightsPage: React.FC = () => {
       }
     };
     fetchInsights();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   if (isLoading || !data) {
     return <div className="p-8 text-center text-xs text-slate-500 animate-pulse">Computing financial intelligence metrics...</div>;
@@ -109,38 +111,48 @@ export const FinancialInsightsPage: React.FC = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {insights.map((item: any) => {
-            const isWarning = item.type === 'warning';
-            return (
-              <div
-                key={item.id}
-                className={`p-5 rounded-xl border shadow-card flex flex-col justify-between space-y-3 ${
-                  isWarning ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-brand-border'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        isWarning ? 'bg-amber-100 text-amber-800' : 'bg-teal-50 text-teal-700'
-                      }`}
-                    >
-                      {item.metric}
-                    </span>
+        {insights && insights.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {insights.map((item: any) => {
+              const isWarning = item.type === 'warning';
+              return (
+                <div
+                  key={item.id}
+                  className={`p-5 rounded-xl border shadow-card flex flex-col justify-between space-y-3 ${
+                    isWarning ? 'bg-amber-50/40 border-amber-200' : 'bg-white border-brand-border'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          isWarning ? 'bg-amber-100 text-amber-800' : 'bg-teal-50 text-teal-700'
+                        }`}
+                      >
+                        {item.metric}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-sm text-slate-900 mt-2">{item.title}</h3>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">{item.description}</p>
                   </div>
-                  <h3 className="font-bold text-sm text-slate-900 mt-2">{item.title}</h3>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">{item.description}</p>
-                </div>
 
-                <div className="pt-3 border-t border-slate-200/60 text-xs">
-                  <div className="font-semibold text-slate-800 text-[11px]">Recommended Action:</div>
-                  <div className="text-slate-600 text-[11px] mt-0.5">{item.recommendation}</div>
+                  <div className="pt-3 border-t border-slate-200/60 text-xs">
+                    <div className="font-semibold text-slate-800 text-[11px]">Recommended Action:</div>
+                    <div className="text-slate-600 text-[11px] mt-0.5">{item.recommendation}</div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-8 text-center bg-white rounded-xl border border-brand-border shadow-card">
+            <Sparkles className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <h3 className="text-sm font-semibold text-slate-700">No financial observations yet</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              Actionable analytics and working capital ratios will populate when business invoices are created or imported.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

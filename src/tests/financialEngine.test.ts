@@ -10,7 +10,9 @@ import {
   getAgingBucket,
   calculateAgingSummary,
   evaluateCustomerPaymentBehavior,
+  calculateAvailableCashBalance,
 } from '../../server/services/financialEngine.js';
+import { BankTransaction } from '../../server/types/index.js';
 
 describe('Financial Engine - Currency & Paise Arithmetic', () => {
   it('correctly converts rupees to integer paise', () => {
@@ -106,5 +108,189 @@ describe('Financial Engine - Aging & Customer Behavior', () => {
     ];
     const behavior = evaluateCustomerPaymentBehavior(invoices);
     expect(behavior.behavior).toBe('insufficient_history');
+  });
+});
+
+describe('Financial Engine - Available Cash Balance Calculation', () => {
+  it('returns ₹0.00 (0 paise) for a fresh workspace with no data', () => {
+    const balance = calculateAvailableCashBalance([], 0);
+    expect(balance).toBe(0);
+    expect(formatINR(balance)).toBe('₹0.00');
+  });
+
+  it('returns ₹0.00 (0 paise) when there is no bank connection and no opening balance', () => {
+    const balance = calculateAvailableCashBalance(undefined, undefined);
+    expect(balance).toBe(0);
+    expect(formatINR(balance)).toBe('₹0.00');
+  });
+
+  it('does NOT increase available cash for pending bank transactions (suggested, unmatched, unverified)', () => {
+    const pendingTransactions: BankTransaction[] = [
+      {
+        id: 'btxn-1',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-18',
+        description: 'NEFT CR-AXIS/928371/BHARAT ELECTRICALS/INV102 TRN',
+        type: 'credit',
+        amountPaise: 10000000, // ₹1,00,000
+        balancePaise: 20000000, // ₹2,00,000 unverified statement balance
+        reconciliationStatus: 'suggested', // Pending match, awaiting manual confirmation
+        matchConfidence: 96,
+        createdAt: '2026-02-18T10:30:00Z',
+      },
+      {
+        id: 'btxn-2',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-19',
+        description: 'UPI CR/987654/CUSTOMER',
+        type: 'credit',
+        amountPaise: 5000000, // ₹50,000
+        reconciliationStatus: 'unmatched', // Unmatched
+        matchConfidence: 0,
+        createdAt: '2026-02-19T10:30:00Z',
+      },
+      {
+        id: 'btxn-3',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-20',
+        description: 'IMPS CR/123456/BUYER',
+        type: 'credit',
+        amountPaise: 7500000, // ₹75,000
+        reconciliationStatus: 'partially_matched', // Pending partial match
+        matchConfidence: 50,
+        createdAt: '2026-02-20T10:30:00Z',
+      },
+    ];
+
+    const balance = calculateAvailableCashBalance(pendingTransactions, 0);
+    expect(balance).toBe(0);
+    expect(formatINR(balance)).toBe('₹0.00');
+  });
+
+  it('calculates correct balance strictly from verified reconciled transactions', () => {
+    const mixedTransactions: BankTransaction[] = [
+      {
+        id: 'btxn-1',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-10',
+        description: 'NEFT CR/PAYMENT-1',
+        type: 'credit',
+        amountPaise: 15000000, // ₹1,50,000
+        reconciliationStatus: 'matched', // Verified reconciled
+        matchConfidence: 100,
+        createdAt: '2026-02-10T10:00:00Z',
+      },
+      {
+        id: 'btxn-2',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-12',
+        description: 'RTGS DR/SUPPLIER-PAYMENT',
+        type: 'debit',
+        amountPaise: 5000000, // ₹50,000
+        reconciliationStatus: 'matched', // Verified reconciled
+        matchConfidence: 100,
+        createdAt: '2026-02-12T10:00:00Z',
+      },
+      {
+        id: 'btxn-3',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-15',
+        description: 'NEFT CR/UNVERIFIED',
+        type: 'credit',
+        amountPaise: 20000000, // ₹2,00,000
+        reconciliationStatus: 'suggested', // Pending (MUST NOT COUNT)
+        matchConfidence: 90,
+        createdAt: '2026-02-15T10:00:00Z',
+      },
+    ];
+
+    // Verified: +1,50,000 - 50,000 = ₹1,00,000 (10000000 paise)
+    const balance = calculateAvailableCashBalance(mixedTransactions, 0);
+    expect(balance).toBe(10000000);
+    expect(formatINR(balance)).toBe('₹1,00,000.00');
+  });
+
+  it('correctly handles explicitly recorded opening balance without bank transactions', () => {
+    const openingBalancePaise = 50000000; // ₹5,00,000
+    const balance = calculateAvailableCashBalance([], openingBalancePaise);
+    expect(balance).toBe(50000000);
+    expect(formatINR(balance)).toBe('₹5,00,000.00');
+  });
+
+  it('correctly combines explicitly recorded opening balance with verified reconciled transactions', () => {
+    const openingBalancePaise = 20000000; // ₹2,00,000
+    const transactions: BankTransaction[] = [
+      {
+        id: 'btxn-1',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-10',
+        description: 'NEFT CR/INVOICE-COLLECTION',
+        type: 'credit',
+        amountPaise: 10000000, // ₹1,00,000
+        reconciliationStatus: 'matched',
+        matchConfidence: 100,
+        createdAt: '2026-02-10T10:00:00Z',
+      },
+      {
+        id: 'btxn-2',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-12',
+        description: 'VENDOR DEBIT',
+        type: 'debit',
+        amountPaise: 3000000, // ₹30,000
+        reconciliationStatus: 'matched',
+        matchConfidence: 100,
+        createdAt: '2026-02-12T10:00:00Z',
+      },
+      {
+        id: 'btxn-3',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-14',
+        description: 'PENDING SUSPENSE',
+        type: 'credit',
+        amountPaise: 8000000, // ₹80,000
+        reconciliationStatus: 'unmatched', // MUST NOT COUNT
+        matchConfidence: 0,
+        createdAt: '2026-02-14T10:00:00Z',
+      },
+    ];
+
+    // Opening 2,00,000 + 1,00,000 - 30,000 = ₹2,70,000 (27000000 paise)
+    const balance = calculateAvailableCashBalance(transactions, openingBalancePaise);
+    expect(balance).toBe(27000000);
+    expect(formatINR(balance)).toBe('₹2,70,000.00');
+  });
+
+  it('anchors to statement balancePaise on verified reconciled transaction', () => {
+    const transactions: BankTransaction[] = [
+      {
+        id: 'btxn-1',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-01',
+        description: 'VERIFIED STATEMENT LINE',
+        type: 'credit',
+        amountPaise: 10000000,
+        balancePaise: 35000000, // ₹3,50,000 verified balance on statement
+        reconciliationStatus: 'matched',
+        matchConfidence: 100,
+        createdAt: '2026-02-01T10:00:00Z',
+      },
+      {
+        id: 'btxn-2',
+        workspaceId: 'ws-test',
+        transactionDate: '2026-02-05',
+        description: 'SUBSEQUENT VERIFIED EXPENSE',
+        type: 'debit',
+        amountPaise: 5000000, // ₹50,000
+        reconciliationStatus: 'matched',
+        matchConfidence: 100,
+        createdAt: '2026-02-05T10:00:00Z',
+      },
+    ];
+
+    // 3,50,000 - 50,000 = ₹3,00,000 (30000000 paise)
+    const balance = calculateAvailableCashBalance(transactions, 0);
+    expect(balance).toBe(30000000);
+    expect(formatINR(balance)).toBe('₹3,00,000.00');
   });
 });

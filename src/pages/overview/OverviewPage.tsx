@@ -53,7 +53,7 @@ export const OverviewPage: React.FC = () => {
 
   useEffect(() => {
     fetchOverview();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   if (isLoading || !data) {
     return (
@@ -78,6 +78,14 @@ export const OverviewPage: React.FC = () => {
     { name: '61-90d Overdue', amountRupees: charts.receivablesAging.bucket61to90Paise / 100 },
     { name: '90+d Overdue', amountRupees: charts.receivablesAging.bucketAbove90Paise / 100 },
   ];
+
+  const hasCashFlowData = Boolean(
+    charts.cashInflowVsOutflow &&
+    charts.cashInflowVsOutflow.length > 0 &&
+    charts.cashInflowVsOutflow.some((m: any) => (m.inflowRupees || 0) > 0 || (m.outflowRupees || 0) > 0)
+  );
+
+  const hasAgingData = Boolean(agingChartData.some((b) => b.amountRupees > 0));
 
   const statusPieData = [
     { name: 'Paid', value: charts.invoiceStatusDistribution.paid.count, color: '#16A36A' },
@@ -145,7 +153,9 @@ export const OverviewPage: React.FC = () => {
           </div>
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span>Gross Sales Issued</span>
-            <span className="text-slate-500 font-medium">3 Invoices</span>
+            <span className="text-slate-500 font-medium">
+              {kpiCards.totalInvoiced.formattedCount || `${kpiCards.totalInvoiced.count ?? 0} Invoices`}
+            </span>
           </div>
         </div>
 
@@ -162,7 +172,9 @@ export const OverviewPage: React.FC = () => {
           </div>
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span>Confirmed Liquid Collections</span>
-            <span className="text-emerald-700 font-semibold">25% Collected</span>
+            <span className="text-emerald-700 font-semibold">
+              {kpiCards.totalReceived.formattedCollection || '0% Collected'}
+            </span>
           </div>
         </div>
 
@@ -196,7 +208,9 @@ export const OverviewPage: React.FC = () => {
           </div>
           <div className="text-[11px] text-rose-600/80 mt-1 flex items-center justify-between">
             <span>Past agreed payment credit date</span>
-            <span className="font-bold underline">83% of Outstanding</span>
+            <span className="font-bold underline">
+              {kpiCards.overdueReceivables.formattedPercentage || '0% of Outstanding'}
+            </span>
           </div>
         </div>
 
@@ -213,7 +227,9 @@ export const OverviewPage: React.FC = () => {
           </div>
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span>Supplier Bills Due</span>
-            <span className="text-purple-600 font-medium">2 Bills Due</span>
+            <span className="text-purple-600 font-medium">
+              {kpiCards.upcomingPayments.formattedBillsDue || `${kpiCards.upcomingPayments.count ?? 0} Bills Due`}
+            </span>
           </div>
         </div>
 
@@ -272,21 +288,31 @@ export const OverviewPage: React.FC = () => {
             </div>
           </div>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={charts.cashInflowVsOutflow}>
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} />
-                <YAxis
-                  tickFormatter={(val) => `₹${val / 1000}k`}
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                />
-                <Tooltip
-                  formatter={(val: any) => formatINR(Number(val) * 100)}
-                  contentStyle={{ backgroundColor: '#101C2C', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                />
-                <Bar dataKey="inflowRupees" fill="#12B8A6" radius={[4, 4, 0, 0]} name="Inflow" />
-                <Bar dataKey="outflowRupees" fill="#DC5353" radius={[4, 4, 0, 0]} name="Outflow" />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasCashFlowData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={charts.cashInflowVsOutflow}>
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis
+                    tickFormatter={(val) => `₹${val / 1000}k`}
+                    tick={{ fontSize: 11, fill: '#64748B' }}
+                  />
+                  <Tooltip
+                    formatter={(val: any) => formatINR(Number(val) * 100)}
+                    contentStyle={{ backgroundColor: '#101C2C', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="inflowRupees" fill="#12B8A6" radius={[4, 4, 0, 0]} name="Inflow" />
+                  <Bar dataKey="outflowRupees" fill="#DC5353" radius={[4, 4, 0, 0]} name="Outflow" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
+                <TrendingUp className="w-8 h-8 text-slate-300 mb-2" />
+                <p className="text-xs font-semibold text-slate-600">No cash flow data yet</p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  Your chart will populate when verified financial transactions are recorded.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -302,17 +328,27 @@ export const OverviewPage: React.FC = () => {
             </button>
           </div>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={agingChartData} layout="vertical">
-                <XAxis type="number" tickFormatter={(val) => `₹${val / 1000}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
-                <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11, fill: '#64748B' }} />
-                <Tooltip
-                  formatter={(val: any) => formatINR(Number(val) * 100)}
-                  contentStyle={{ backgroundColor: '#101C2C', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                />
-                <Bar dataKey="amountRupees" fill="#F5A623" radius={[0, 4, 4, 0]} name="Outstanding" />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasAgingData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={agingChartData} layout="vertical">
+                  <XAxis type="number" tickFormatter={(val) => `₹${val / 1000}k`} tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11, fill: '#64748B' }} />
+                  <Tooltip
+                    formatter={(val: any) => formatINR(Number(val) * 100)}
+                    contentStyle={{ backgroundColor: '#101C2C', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="amountRupees" fill="#F5A623" radius={[0, 4, 4, 0]} name="Outstanding" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
+                <Clock className="w-8 h-8 text-slate-300 mb-2" />
+                <p className="text-xs font-semibold text-slate-600">No outstanding receivables</p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                  All customer invoices are settled or no credit invoices have been issued yet.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -328,25 +364,31 @@ export const OverviewPage: React.FC = () => {
             </button>
           </div>
           <div className="divide-y divide-slate-100">
-            {topOutstandingCustomers.map((cust: any) => (
-              <div key={cust.customerId} className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">{cust.name}</div>
-                  <div className="text-[11px] text-slate-400">{cust.invoiceCount} Unsettled Invoice(s)</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs font-bold text-brand-primary-navy">
-                    {formatINR(cust.outstandingPaise)}
+            {topOutstandingCustomers && topOutstandingCustomers.length > 0 ? (
+              topOutstandingCustomers.map((cust: any) => (
+                <div key={cust.customerId} className="py-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-800">{cust.name}</div>
+                    <div className="text-[11px] text-slate-400">{cust.invoiceCount} Unsettled Invoice(s)</div>
                   </div>
-                  <button
-                    onClick={() => navigate('/reminders')}
-                    className="text-[10px] text-brand-teal hover:underline font-semibold"
-                  >
-                    Draft Reminder
-                  </button>
+                  <div className="text-right">
+                    <div className="text-xs font-bold text-brand-primary-navy">
+                      {formatINR(cust.outstandingPaise)}
+                    </div>
+                    <button
+                      onClick={() => navigate('/reminders')}
+                      className="text-[10px] text-brand-teal hover:underline font-semibold"
+                    >
+                      Draft Reminder
+                    </button>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No outstanding customer balances
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -354,51 +396,60 @@ export const OverviewPage: React.FC = () => {
         <div className="p-5 bg-white rounded-xl border border-brand-border shadow-card space-y-4">
           <h2 className="text-sm font-bold text-slate-800">Pending Financial Verifications</h2>
 
-          {/* Verification Discrepancy Alert */}
-          {documentVerificationAlerts.map((vCase: any) => (
-            <div key={vCase.id} className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/50 flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">{vCase.caseNumber}</span>
-                  <span className="text-xs font-bold text-amber-800">
-                    {formatINR(vCase.monetaryImpactPaise)} Variance
-                  </span>
+          {((documentVerificationAlerts && documentVerificationAlerts.length > 0) ||
+            (unmatchedBankTransactions && unmatchedBankTransactions.length > 0)) ? (
+            <>
+              {/* Verification Discrepancy Alert */}
+              {documentVerificationAlerts.map((vCase: any) => (
+                <div key={vCase.id} className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/50 flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">{vCase.caseNumber}</span>
+                      <span className="text-xs font-bold text-amber-800">
+                        {formatINR(vCase.monetaryImpactPaise)} Variance
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">{vCase.summary}</p>
+                    <div className="mt-2">
+                      <button
+                        onClick={() => navigate('/verification')}
+                        className="text-xs font-semibold text-brand-teal hover:underline flex items-center gap-1"
+                      >
+                        Review Discrepancy in Verification Centre &rarr;
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-600 mt-1">{vCase.summary}</p>
-                <div className="mt-2">
-                  <button
-                    onClick={() => navigate('/verification')}
-                    className="text-xs font-semibold text-brand-teal hover:underline flex items-center gap-1"
-                  >
-                    Review Discrepancy in Verification Centre &rarr;
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              ))}
 
-          {/* Unmatched Bank Transaction Match */}
-          {unmatchedBankTransactions.map((txn: any) => (
-            <div key={txn.id} className="p-3.5 rounded-lg border border-teal-200 bg-teal-50/40 flex items-start gap-3">
-              <CheckCircle2 className="w-4 h-4 text-brand-teal shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">Suggested Bank Match</span>
-                  <span className="text-xs font-bold text-brand-teal">{formatINR(txn.amountPaise)}</span>
+              {/* Unmatched Bank Transaction Match */}
+              {unmatchedBankTransactions.map((txn: any) => (
+                <div key={txn.id} className="p-3.5 rounded-lg border border-teal-200 bg-teal-50/40 flex items-start gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-brand-teal shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">Suggested Bank Match</span>
+                      <span className="text-xs font-bold text-brand-teal">{formatINR(txn.amountPaise)}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">{txn.matchReason}</p>
+                    <div className="mt-2">
+                      <button
+                        onClick={() => navigate('/reconciliation')}
+                        className="text-xs font-semibold text-brand-teal hover:underline flex items-center gap-1"
+                      >
+                        Confirm Match in Bank Reconciliation &rarr;
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-600 mt-1">{txn.matchReason}</p>
-                <div className="mt-2">
-                  <button
-                    onClick={() => navigate('/reconciliation')}
-                    className="text-xs font-semibold text-brand-teal hover:underline flex items-center gap-1"
-                  >
-                    Confirm Match in Bank Reconciliation &rarr;
-                  </button>
-                </div>
-              </div>
+              ))}
+            </>
+          ) : (
+            <div className="py-8 text-center text-xs text-slate-400">
+              No pending verifications or unmatched bank transactions
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -411,18 +462,24 @@ export const OverviewPage: React.FC = () => {
           </button>
         </div>
         <div className="divide-y divide-slate-100">
-          {recentActivity.map((log: any) => (
-            <div key={log.id} className="py-2.5 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-brand-teal" />
-                <span className="font-semibold text-slate-800">{log.action}</span>
-                <span className="text-slate-500 truncate max-w-md">{log.details}</span>
+          {recentActivity && recentActivity.length > 0 ? (
+            recentActivity.map((log: any) => (
+              <div key={log.id} className="py-2.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="w-2 h-2 rounded-full bg-brand-teal" />
+                  <span className="font-semibold text-slate-800">{log.action}</span>
+                  <span className="text-slate-500 truncate max-w-md">{log.details}</span>
+                </div>
+                <span className="text-[11px] text-slate-400 whitespace-nowrap ml-4">
+                  {formatDate(log.createdAt)}
+                </span>
               </div>
-              <span className="text-[11px] text-slate-400 whitespace-nowrap ml-4">
-                {formatDate(log.createdAt)}
-              </span>
+            ))
+          ) : (
+            <div className="py-6 text-center text-xs text-slate-400">
+              No recent activity logged for this workspace
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>

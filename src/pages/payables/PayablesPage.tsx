@@ -15,8 +15,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Bill, Supplier } from '../../types/index.js';
 import { formatINR, formatDate, getStatusBadgeProps, paiseToRupees } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const PayablesPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [bills, setBills] = useState<Bill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -56,7 +58,7 @@ export const PayablesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPayables();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleCreateBill = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -40,7 +40,7 @@ export const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleResetDemoData = async () => {
     try {

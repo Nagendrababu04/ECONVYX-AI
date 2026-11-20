@@ -1,6 +1,8 @@
 // Financial Engine - Deterministic Financial Arithmetic and Logic
 // All monetary values handled as integer paise (₹1 = 100 paise)
 
+import { BankTransaction } from '../types/index.js';
+
 export interface Money {
   paise: number;
 }
@@ -337,4 +339,64 @@ export function evaluateCustomerPaymentBehavior(invoices: Array<{
     invoiceCount,
     rationale: `Frequent delays: only ${onTimePercentage}% of invoices settled on time. Proactive payment reminders recommended.`,
   };
+}
+
+/**
+ * Calculate Available Cash Balance strictly from:
+ * 1. Verified, reconciled bank transactions (reconciliationStatus === 'matched').
+ * 2. Explicitly recorded opening balance (if any).
+ *
+ * Unmatched, suggested (pending), partially matched, or ignored transactions
+ * are NOT treated as available cash.
+ * If no verified balance or opening balance exists, returns 0 paise (₹0.00).
+ */
+export function calculateAvailableCashBalance(
+  bankTransactions: BankTransaction[] = [],
+  explicitOpeningBalancePaise: number = 0
+): number {
+  const verifiedTxns = (bankTransactions || []).filter(
+    (t) => t.reconciliationStatus === 'matched'
+  );
+
+  // If no verified transactions and no opening balance, return 0
+  if (verifiedTxns.length === 0 && !explicitOpeningBalancePaise) {
+    return 0;
+  }
+
+  // Sort verified transactions chronologically (by transactionDate then createdAt)
+  const sorted = [...verifiedTxns].sort((a, b) => {
+    const dateCmp = (a.transactionDate || '').localeCompare(b.transactionDate || '');
+    if (dateCmp !== 0) return dateCmp;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+
+  // Check if any verified transaction has an explicit statement balancePaise.
+  // The latest verified transaction with a statement balance anchors the verified balance,
+  // and subsequent verified transactions adjust from there.
+  let latestBalanceIdx = -1;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].balancePaise !== undefined && sorted[i].balancePaise !== null) {
+      latestBalanceIdx = i;
+      break;
+    }
+  }
+
+  let currentBalance = explicitOpeningBalancePaise || 0;
+  let startIndex = 0;
+
+  if (latestBalanceIdx >= 0) {
+    currentBalance = sorted[latestBalanceIdx].balancePaise!;
+    startIndex = latestBalanceIdx + 1;
+  }
+
+  for (let i = startIndex; i < sorted.length; i++) {
+    const txn = sorted[i];
+    if (txn.type === 'credit') {
+      currentBalance += txn.amountPaise;
+    } else if (txn.type === 'debit') {
+      currentBalance -= txn.amountPaise;
+    }
+  }
+
+  return Math.max(0, currentBalance);
 }

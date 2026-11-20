@@ -32,6 +32,7 @@ export interface BusinessWorkspace {
   defaultPaymentTermsDays: number;
   timezone: string;
   isDemo: boolean;
+  openingBalancePaise?: number;
   createdAt: string;
 }
 

@@ -43,7 +43,7 @@ export const ReportingCentrePage: React.FC = () => {
 
   useEffect(() => {
     fetchReport();
-  }, [selectedReport]);
+  }, [selectedReport, activeWorkspace?.id]);
 
   const handleExportCsv = () => {
     window.open(`/api/reports/${selectedReport}?format=csv`, '_blank');

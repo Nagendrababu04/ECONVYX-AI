@@ -18,8 +18,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { DocumentItem, DocumentType } from '../../types/index.js';
 import { formatINR, formatDate, getStatusBadgeProps } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const DocumentIntelligencePage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,7 +48,7 @@ export const DocumentIntelligencePage: React.FC = () => {
 
   useEffect(() => {
     fetchDocs();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

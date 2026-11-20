@@ -16,8 +16,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Invoice, Reminder } from '../../types/index.js';
 import { formatINR, formatDate, copyToClipboard } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const PaymentRemindersPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [overdueInvoices, setOverdueInvoices] = useState<Invoice[]>([]);
   const [upcomingInvoices, setUpcomingInvoices] = useState<Invoice[]>([]);
@@ -50,8 +52,9 @@ export const PaymentRemindersPage: React.FC = () => {
   };
 
   useEffect(() => {
+    setActiveDraft(null);
     fetchRemindersData();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleGenerateDraft = async () => {
     if (!selectedInvoiceId) return;

@@ -34,6 +34,7 @@ export interface BusinessWorkspace {
   defaultPaymentTermsDays: number;
   timezone: string; // 'Asia/Kolkata'
   isDemo: boolean;
+  openingBalancePaise?: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -22,8 +22,10 @@ import {
 } from 'recharts';
 import { api } from '../../lib/api.js';
 import { formatINR, formatDate } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const CashFlowPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const [horizon, setHorizon] = useState<number>(30);
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,7 +54,7 @@ export const CashFlowPage: React.FC = () => {
 
   useEffect(() => {
     fetchForecast(isScenarioActive);
-  }, [horizon, isScenarioActive]);
+  }, [horizon, isScenarioActive, activeWorkspace?.id]);
 
   const handleApplyScenario = () => {
     setIsScenarioActive(true);
@@ -127,7 +129,7 @@ export const CashFlowPage: React.FC = () => {
         <div className="p-4 bg-white rounded-xl border border-brand-border shadow-card">
           <div className="text-xs text-slate-500 font-medium">Opening Cash Balance</div>
           <div className="text-xl font-extrabold text-slate-900 mt-1">
-            {data?.openingBalance?.formatted || '₹2,00,000.00'}
+            {data?.openingBalance?.formatted || '₹0.00'}
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">Verified liquid bank balance</div>
         </div>

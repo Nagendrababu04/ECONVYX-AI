@@ -5,8 +5,10 @@ import { History, Search, Filter, ShieldCheck, User } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { AuditLog } from '../../types/index.js';
 import { formatDate } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const ActivityAuditTrailPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -26,7 +28,7 @@ export const ActivityAuditTrailPage: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [entityFilter]);
+  }, [entityFilter, activeWorkspace?.id]);
 
   return (
     <div className="space-y-6">

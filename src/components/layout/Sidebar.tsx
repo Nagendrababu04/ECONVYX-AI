@@ -1,7 +1,7 @@
 // Navigation Sidebar Component
 // Deep Navy #050722, Aqua active indicators, 15 complete working navigation routes
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Logo } from '../brand/Logo.js';
 import { useAuth } from '../../context/AuthContext.js';
+import { api } from '../../lib/api.js';
 
 interface SidebarProps {
   isOpenMobile: boolean;
@@ -32,16 +33,50 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpenMobile, onCloseMobile }) => {
   const { activeWorkspace } = useAuth();
+  const [badgeCounts, setBadgeCounts] = useState<{ verificationFlagsCount: number; suggestedMatchesCount: number }>({
+    verificationFlagsCount: 0,
+    suggestedMatchesCount: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchBadges = async () => {
+      try {
+        const counts = await api.getBadgeCounts();
+        if (isMounted && counts) {
+          setBadgeCounts(counts);
+        }
+      } catch {
+        // Fallback or quiet failure
+      }
+    };
+    fetchBadges();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeWorkspace?.id]);
 
   const navItems = [
     { name: 'Overview', path: '/', icon: LayoutDashboard },
     { name: 'Documents', path: '/documents', icon: FileText, badge: 'AI' },
-    { name: 'Verification Centre', path: '/verification', icon: ShieldCheck, badge: '1 Flag' },
+    {
+      name: 'Verification Centre',
+      path: '/verification',
+      icon: ShieldCheck,
+      badge: badgeCounts.verificationFlagsCount > 0
+        ? `${badgeCounts.verificationFlagsCount} Flag${badgeCounts.verificationFlagsCount > 1 ? 's' : ''}`
+        : undefined,
+    },
     { name: 'Receivables', path: '/receivables', icon: ArrowDownLeft },
     { name: 'Payables', path: '/payables', icon: ArrowUpRight },
     { name: 'Customers', path: '/customers', icon: Users },
     { name: 'Suppliers', path: '/suppliers', icon: Truck },
-    { name: 'Bank Reconciliation', path: '/reconciliation', icon: Building2, badge: 'Suggested' },
+    {
+      name: 'Bank Reconciliation',
+      path: '/reconciliation',
+      icon: Building2,
+      badge: badgeCounts.suggestedMatchesCount > 0 ? 'Suggested' : undefined,
+    },
     { name: 'Cash Flow', path: '/cashflow', icon: TrendingUp },
     { name: 'Financial Insights', path: '/insights', icon: LineChart },
     { name: 'AI Finance Assistant', path: '/ai-assistant', icon: Sparkles, badge: 'Active' },

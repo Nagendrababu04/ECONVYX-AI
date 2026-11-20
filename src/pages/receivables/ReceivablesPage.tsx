@@ -18,8 +18,10 @@ import { useToast } from '../../context/ToastContext.js';
 import { Invoice, Customer } from '../../types/index.js';
 import { formatINR, formatDate, getStatusBadgeProps, paiseToRupees } from '../../lib/utils.js';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const ReceivablesPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -71,7 +73,7 @@ export const ReceivablesPage: React.FC = () => {
 
   useEffect(() => {
     fetchInvoices();
-  }, [statusFilter, customerFilter]);
+  }, [statusFilter, customerFilter, activeWorkspace?.id]);
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();

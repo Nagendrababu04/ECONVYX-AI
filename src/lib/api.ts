@@ -16,7 +16,7 @@ export class ApiError extends Error {
 
 async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('econvyx_token');
-  const workspaceId = localStorage.getItem('econvyx_active_workspace') || 'ws-apex-demo-001';
+  const workspaceId = localStorage.getItem('econvyx_active_workspace') || '';
 
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -68,8 +68,12 @@ export const api = {
   getMe: () => request('/auth/me'),
   getMicrosoftAuthStatus: () => request('/auth/microsoft/status'),
   getWorkspaces: () => request('/workspaces'),
+  getBadgeCounts: () =>
+    request<{ verificationFlagsCount: number; suggestedMatchesCount: number }>('/workspaces/badge-counts'),
   createWorkspaceOnboarding: (data: any) =>
     request('/workspaces/onboarding', { method: 'POST', body: JSON.stringify(data) }),
+  updateWorkspace: (data: { name?: string; gstin?: string; pan?: string; currency?: string; openingBalanceRupees?: number }) =>
+    request('/settings/workspace', { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Overview
   getOverview: () => request('/overview'),

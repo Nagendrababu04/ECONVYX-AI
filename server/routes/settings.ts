@@ -46,6 +46,44 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
   });
 });
 
+// Update Workspace Settings & Explicit Opening Balance
+router.patch('/workspace', (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.workspaceId!;
+  const { openingBalancePaise, openingBalanceRupees, name, industry, gstin, pan, address, city, state, pinCode } = req.body;
+  const updates: Record<string, any> = {};
+
+  if (openingBalancePaise !== undefined) {
+    updates.openingBalancePaise = Math.max(0, Math.round(Number(openingBalancePaise)));
+  } else if (openingBalanceRupees !== undefined) {
+    updates.openingBalancePaise = Math.max(0, Math.round(Number(openingBalanceRupees) * 100));
+  }
+
+  if (name) updates.name = name;
+  if (industry) updates.industry = industry;
+  if (gstin) updates.gstin = gstin;
+  if (pan) updates.pan = pan;
+  if (address) updates.address = address;
+  if (city) updates.city = city;
+  if (state) updates.state = state;
+  if (pinCode) updates.pinCode = pinCode;
+
+  const updated = db.updateWorkspace(workspaceId, updates);
+  if (!updated) {
+    return res.status(404).json({ error: 'Workspace not found.' });
+  }
+
+  db.addAuditLog({
+    workspaceId,
+    userEmail: req.user?.email || 'user',
+    action: 'WORKSPACE_SETTINGS_UPDATED',
+    entityType: 'business_workspace',
+    entityId: workspaceId,
+    details: `Updated workspace settings. ${updates.openingBalancePaise !== undefined ? `Opening balance set to ${updates.openingBalancePaise / 100} INR.` : ''}`,
+  });
+
+  return res.json({ message: 'Workspace updated successfully.', workspace: updated });
+});
+
 // Reset Demo Data
 router.post('/reset-demo', (req: AuthenticatedRequest, res: Response) => {
   db.resetDemoWorkspace();

@@ -17,8 +17,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Customer } from '../../types/index.js';
 import { formatINR, getStatusBadgeProps } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const CustomersPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +53,7 @@ export const CustomersPage: React.FC = () => {
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +110,14 @@ export const CustomersPage: React.FC = () => {
 
       {/* Customer Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map((cust) => {
+        {filtered.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="font-semibold text-slate-600">No customer profiles recorded</p>
+            <p className="text-[11px] text-slate-400 mt-1">Add your first customer to begin tracking credit and collection history.</p>
+          </div>
+        ) : (
+          filtered.map((cust) => {
           const profile = cust.profile;
           const statusProps = getStatusBadgeProps(profile?.behavior || 'insufficient_history');
 
@@ -178,7 +187,7 @@ export const CustomersPage: React.FC = () => {
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Add Customer Modal */}

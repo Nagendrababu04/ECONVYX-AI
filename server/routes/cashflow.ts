@@ -4,7 +4,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest, tenantAuthMiddleware } from '../middleware/auth.js';
 import { db } from '../db/database.js';
 import { computeCashFlowForecast } from '../services/cashFlowService.js';
-import { formatINR, paiseToRupees, rupeesToPaise } from '../services/financialEngine.js';
+import { calculateAvailableCashBalance, formatINR, paiseToRupees, rupeesToPaise } from '../services/financialEngine.js';
 
 const router = Router();
 router.use(tenantAuthMiddleware);
@@ -16,8 +16,10 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
   const invoices = db.getInvoices(workspaceId);
   const bills = db.getBills(workspaceId);
 
-  // Exact demo baseline: ₹2,00,000 opening balance
-  const openingBalancePaise = 20000000;
+  const workspace = db.getWorkspace(workspaceId);
+  const bankTransactions = db.getBankTransactions(workspaceId);
+  const explicitOpeningBalancePaise = workspace?.openingBalancePaise || 0;
+  const openingBalancePaise = calculateAvailableCashBalance(bankTransactions, explicitOpeningBalancePaise);
 
   // Compute Baseline Forecast
   const baselineForecast = computeCashFlowForecast({

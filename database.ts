@@ -1,4 +1,4 @@
-﻿// Persistent Relational Store & Multi-Tenant Database Manager
+// Persistent Relational Store & Multi-Tenant Database Manager
 // Stores transactional business data with ACID consistency and workspace isolation
 
 import fs from 'fs';
@@ -218,6 +218,18 @@ class DatabaseManager {
     this.data.businessWorkspaces.push(workspace);
     this.save();
     return workspace;
+  }
+
+  public updateWorkspace(id: string, updates: Partial<BusinessWorkspace>): BusinessWorkspace | null {
+    const idx = this.data.businessWorkspaces.findIndex((w) => w.id === id || w.slug === id);
+    if (idx === -1) return null;
+    this.data.businessWorkspaces[idx] = {
+      ...this.data.businessWorkspaces[idx],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.save();
+    return this.data.businessWorkspaces[idx];
   }
 
   public addCustomer(customer: Customer) {

@@ -16,8 +16,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { VerificationCase } from '../../types/index.js';
 import { formatINR, formatDate, getStatusBadgeProps } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const VerificationCentrePage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [cases, setCases] = useState<VerificationCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,8 +46,9 @@ export const VerificationCentrePage: React.FC = () => {
   };
 
   useEffect(() => {
+    setSelectedCase(null);
     fetchCases();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleResolveCase = async () => {
     if (!selectedCase) return;

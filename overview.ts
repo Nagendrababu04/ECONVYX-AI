@@ -3,7 +3,7 @@
 import { Router, Response } from 'express';
 import { AuthenticatedRequest, tenantAuthMiddleware } from '../middleware/auth.js';
 import { db } from '../db/database.js';
-import { calculateAgingSummary, formatINR } from '../services/financialEngine.js';
+import { calculateAgingSummary, calculateAvailableCashBalance, formatINR } from '../services/financialEngine.js';
 
 const router = Router();
 router.use(tenantAuthMiddleware);
@@ -45,9 +45,9 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     }
   }
 
-  // Available cash balance from bank statements (or opening baseline)
-  const latestTxnWithBalance = bankTransactions.find((t) => t.balancePaise !== undefined);
-  const availableCashBalancePaise = latestTxnWithBalance?.balancePaise || 20000000; // ₹2,00,000 baseline
+  // Available cash balance strictly from verified reconciled bank records and explicit opening balance
+  const explicitOpeningBalancePaise = workspace?.openingBalancePaise || 0;
+  const availableCashBalancePaise = calculateAvailableCashBalance(bankTransactions, explicitOpeningBalancePaise);
 
   // 2. Receivables Aging
   const agingSummary = calculateAgingSummary(invoices);
@@ -71,22 +71,66 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     }
   }
 
-  // 4. Cash Inflow vs Outflow monthly
-  const monthlyFlows = [
-    { month: 'Nov', inflowRupees: 350000, outflowRupees: 180000, forecast: false },
-    { month: 'Dec', inflowRupees: 420000, outflowRupees: 210000, forecast: false },
-    { month: 'Jan', inflowRupees: 480000, outflowRupees: 250000, forecast: false },
-    { month: 'Feb', inflowRupees: 200000, outflowRupees: 230000, forecast: false },
-    { month: 'Mar (Est)', inflowRupees: 600000, outflowRupees: 210000, forecast: true },
-    { month: 'Apr (Est)', inflowRupees: 650000, outflowRupees: 240000, forecast: true },
-  ];
+  // 4. Calculate actual monthly inflows and outflows from verified payments & reconciled bank transactions
+  const payments = db.getPayments(workspaceId);
+  const now = new Date();
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // 5. Receivables Trend
+  // Trailing 6 calendar months
+  const trailingMonths: Array<{ key: string; label: string }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yr = d.getFullYear();
+    const mIdx = d.getMonth();
+    const key = `${yr}-${String(mIdx + 1).padStart(2, '0')}`;
+    trailingMonths.push({ key, label: monthNames[mIdx] });
+  }
+
+  const monthlyTotals: Record<string, { inflowPaise: number; outflowPaise: number }> = {};
+  for (const tm of trailingMonths) {
+    monthlyTotals[tm.key] = { inflowPaise: 0, outflowPaise: 0 };
+  }
+
+  for (const p of payments) {
+    if (p.paymentType === 'incoming' && p.paymentDate) {
+      const monthKey = p.paymentDate.slice(0, 7);
+      if (monthlyTotals[monthKey]) {
+        monthlyTotals[monthKey].inflowPaise += p.amountPaise;
+      }
+    } else if (p.paymentType === 'outgoing' && p.paymentDate) {
+      const monthKey = p.paymentDate.slice(0, 7);
+      if (monthlyTotals[monthKey]) {
+        monthlyTotals[monthKey].outflowPaise += p.amountPaise;
+      }
+    }
+  }
+
+  // Include reconciled bank transactions not already linked to payment
+  for (const txn of bankTransactions) {
+    if (txn.reconciliationStatus === 'matched' && !txn.matchedPaymentId && txn.transactionDate) {
+      const monthKey = txn.transactionDate.slice(0, 7);
+      if (monthlyTotals[monthKey]) {
+        if (txn.type === 'credit') {
+          monthlyTotals[monthKey].inflowPaise += txn.amountPaise;
+        } else if (txn.type === 'debit') {
+          monthlyTotals[monthKey].outflowPaise += txn.amountPaise;
+        }
+      }
+    }
+  }
+
+  const monthlyFlows = trailingMonths.map((tm) => ({
+    month: tm.label,
+    inflowRupees: Math.round((monthlyTotals[tm.key]?.inflowPaise || 0) / 100),
+    outflowRupees: Math.round((monthlyTotals[tm.key]?.outflowPaise || 0) / 100),
+    forecast: false,
+  }));
+
+  // 5. Receivables Trend based on actual outstanding metrics
   const receivablesTrend = [
-    { period: 'Week 1', outstandingRupees: 450000 },
-    { period: 'Week 2', outstandingRupees: 520000 },
-    { period: 'Week 3', outstandingRupees: 580000 },
-    { period: 'Current', outstandingRupees: totalOutstandingReceivablesPaise / 100 },
+    { period: 'Historical', outstandingRupees: Math.round(totalReceivedPaise / 100) },
+    { period: 'Overdue', outstandingRupees: Math.round(totalOverdueReceivablesPaise / 100) },
+    { period: 'Current', outstandingRupees: Math.round(totalOutstandingReceivablesPaise / 100) },
   ];
 
   // 6. Top Outstanding Customers
@@ -121,24 +165,58 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
     (t) => t.reconciliationStatus === 'unmatched' || t.reconciliationStatus === 'suggested'
   );
 
-  // AI-generated Financial Observations
-  const aiObservations = [
-    {
+  // AI-generated Financial Observations (dynamically generated from actual workspace data)
+  const aiObservations: Array<{ type: string; title: string; description: string }> = [];
+
+  if (totalOverdueReceivablesPaise > 0) {
+    const overdueRatio = totalOutstandingReceivablesPaise > 0
+      ? Math.round((totalOverdueReceivablesPaise / totalOutstandingReceivablesPaise) * 100)
+      : 100;
+    aiObservations.push({
       type: 'warning',
       title: 'High Overdue Concentration',
-      description: `${formatINR(totalOverdueReceivablesPaise)} (83% of outstanding) is currently past its payment due date. Follow-up recommended.`,
-    },
-    {
+      description: `${formatINR(totalOverdueReceivablesPaise)} (${overdueRatio}% of outstanding) is currently past its payment due date. Follow-up recommended.`,
+    });
+  }
+
+  const mismatchCase = verificationCases.find((v) => v.status === 'mismatch' || v.status === 'needs_review');
+  if (mismatchCase) {
+    aiObservations.push({
       type: 'alert',
-      title: 'PO vs Invoice Discrepancy Flagged',
-      description: `Case VC-2026-101 has an unverified quantity variance of ₹1,00,000 on Precision Fasteners.`,
-    },
-    {
+      title: 'Document Discrepancy Flagged',
+      description: `Case ${mismatchCase.caseNumber} has an unverified variance. Review recommended.`,
+    });
+  }
+
+  const suggestedBankTxn = bankTransactions.find((t) => t.reconciliationStatus === 'suggested');
+  if (suggestedBankTxn) {
+    aiObservations.push({
       type: 'action',
       title: 'Pending Bank Match',
-      description: `A ₹1,00,000 credit matches INV-102 with 96% confidence. Awaiting manual confirmation.`,
-    },
-  ];
+      description: `A ${formatINR(suggestedBankTxn.amountPaise)} ${suggestedBankTxn.type} matches invoice records with ${suggestedBankTxn.matchConfidence}% confidence. Awaiting manual confirmation.`,
+    });
+  }
+
+  if (aiObservations.length === 0) {
+    aiObservations.push({
+      type: 'info',
+      title: 'No Financial Observations Yet',
+      description: 'No financial observations yet. Insights will appear when business financial data becomes available.',
+    });
+  }
+
+  const invoiceCount = invoices.length;
+  const collectionPercentage = totalInvoicedPaise > 0
+    ? Math.round((totalReceivedPaise / totalInvoicedPaise) * 100)
+    : 0;
+  const openInvoicesCount = invoices.filter((i) => i.outstandingAmountPaise > 0).length;
+  const overdueInvoicesCount = invoices.filter(
+    (i) => i.outstandingAmountPaise > 0 && i.dueDate < today && i.status !== 'paid'
+  ).length;
+  const overduePercentage = totalOutstandingReceivablesPaise > 0
+    ? Math.round((totalOverdueReceivablesPaise / totalOutstandingReceivablesPaise) * 100)
+    : 0;
+  const upcomingBillsCount = bills.filter((b) => b.outstandingAmountPaise > 0 && b.status !== 'paid').length;
 
   return res.json({
     workspace: {
@@ -150,26 +228,37 @@ router.get('/', (req: AuthenticatedRequest, res: Response) => {
       totalInvoiced: {
         paise: totalInvoicedPaise,
         formatted: formatINR(totalInvoicedPaise),
+        count: invoiceCount,
+        formattedCount: `${invoiceCount} ${invoiceCount === 1 ? 'Invoice' : 'Invoices'}`,
         tooltip: 'Sum of all confirmed sales invoices issued.',
       },
       totalReceived: {
         paise: totalReceivedPaise,
         formatted: formatINR(totalReceivedPaise),
+        collectionPercentage,
+        formattedCollection: `${collectionPercentage}% Collected`,
         tooltip: 'Total confirmed payments allocated to invoices.',
       },
       outstandingReceivables: {
         paise: totalOutstandingReceivablesPaise,
         formatted: formatINR(totalOutstandingReceivablesPaise),
+        count: openInvoicesCount,
+        formattedOpen: `${openInvoicesCount} Open`,
         tooltip: 'Total Invoiced − Total Confirmed Receipts.',
       },
       overdueReceivables: {
         paise: totalOverdueReceivablesPaise,
         formatted: formatINR(totalOverdueReceivablesPaise),
+        count: overdueInvoicesCount,
+        overduePercentage,
+        formattedPercentage: `${overduePercentage}% of Outstanding`,
         tooltip: 'Outstanding balance on invoices past their agreed due date.',
       },
       upcomingPayments: {
         paise: upcomingPaymentsPaise,
         formatted: formatINR(upcomingPaymentsPaise),
+        count: upcomingBillsCount,
+        formattedBillsDue: `${upcomingBillsCount} ${upcomingBillsCount === 1 ? 'Bill Due' : 'Bills Due'}`,
         tooltip: 'Approved and pending supplier bills due in the upcoming cycle.',
       },
       availableCashBalance: {

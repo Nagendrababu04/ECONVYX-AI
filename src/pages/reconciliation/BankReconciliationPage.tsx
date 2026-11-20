@@ -17,8 +17,10 @@ import { api } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { BankTransaction } from '../../types/index.js';
 import { formatINR, formatDate, getStatusBadgeProps } from '../../lib/utils.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 export const BankReconciliationPage: React.FC = () => {
+  const { activeWorkspace } = useAuth();
   const { addToast } = useToast();
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -42,7 +44,7 @@ export const BankReconciliationPage: React.FC = () => {
 
   useEffect(() => {
     fetchReconciliation();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
