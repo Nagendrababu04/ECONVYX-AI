@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: econvyx-api
+    name: econvyx-ai
     runtime: node
     plan: starter
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     disk:
@@ -25,3 +25,5 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash

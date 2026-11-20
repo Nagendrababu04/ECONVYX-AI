@@ -4,6 +4,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import session from 'express-session';
 import { CLIENT_ORIGINS } from './config.js';
@@ -31,7 +32,8 @@ import auditRouter from './routes/audit.js';
 import settingsRouter from './routes/settings.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
+const HOST = '0.0.0.0';
 
 // Security & Middlewares
 app.use(cors({
@@ -47,6 +49,12 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Ensure upload directory exists on startup
+const uploadDir = path.resolve(process.env.STORAGE_DIR || 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Uploaded documents are served only by authenticated, workspace-scoped routes.
 
@@ -83,13 +91,29 @@ app.use('/api/settings', settingsRouter);
 // Serve frontend in production
 const distPath = path.resolve(process.cwd(), 'dist');
 app.use(express.static(distPath));
+
+// API 404 handler (ensures unknown API calls return JSON error rather than index.html)
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    error: `API endpoint ${req.method} ${req.path} not found.`,
+    code: 'NOT_FOUND',
+  });
+});
+
+// SPA fallback: Return index.html for all non-API/non-upload GET routes
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+  if (req.path.startsWith('/uploads')) {
     return next();
   }
-  res.sendFile(path.join(distPath, 'index.html'), (err) => {
-    if (err) next();
-  });
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(503).json({
+      error: 'Frontend build not found. Please run "npm run build" before starting the server.',
+      code: 'BUILD_REQUIRED',
+    });
+  }
 });
 
 // Centralized Error Handler
@@ -101,10 +125,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`=======================================================`);
   console.log(`🚀 ECONVYX AI Platform Backend is operational`);
-  console.log(`⚡ Port: ${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`⚡ Binding: ${HOST}:${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Tenant Isolation & Deterministic Engine: ACTIVE`);
   console.log(`=======================================================`);
 });

@@ -1,8 +1,8 @@
-﻿# ECONVYX AI
+# ECONVYX AI
 
 > Turn financial complexity into clarity.
 
-ECONVYX AI is a React/TypeScript frontend with an Express/TypeScript API for Indian MSME finance workflows. It includes demo records for Apex Components, deterministic financial services, authenticated API routes, and a PostgreSQL schema draft.
+ECONVYX AI is a full-stack financial intelligence platform for Indian MSME finance workflows (PO → GRN → Invoice → Payment → Bank Reconciliation → Cash Flow Intelligence). It features a React 18 / TypeScript frontend and an Express / TypeScript backend with deterministic paise calculations, JWT authentication, and Google Gemini document intelligence.
 
 ## Current implementation status
 
