@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import session from 'express-session';
+import { fileURLToPath } from 'url';
 import { CLIENT_ORIGINS } from './config.js';
 
 // Load environment variables FIRST before any imports that read them
@@ -35,15 +36,54 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = '0.0.0.0';
 
-// Security & Middlewares
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || process.env.NODE_ENV !== 'production' || CLIENT_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Origin is not allowed by CORS.'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = fs.existsSync(path.resolve(process.cwd(), 'dist', 'index.html'))
+  ? path.resolve(process.cwd(), 'dist')
+  : path.resolve(__dirname, '..');
+
+// 1. Static Assets & Frontend Files (served before API middlewares and separate from API CORS)
+// Fingerprinted static assets under /assets: immutable caching and permissive CORS
+app.use('/assets', express.static(path.join(distPath, 'assets'), {
+  maxAge: '1y',
+  immutable: true,
+  setHeaders(res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
+}));
+
+// Any asset request under /assets not found on disk returns 404 (never HTML fallback)
+app.use('/assets', (req, res) => {
+  res.status(404).type('text/plain').send('Asset not found');
+});
+
+// Root static files (e.g. logo-icon.svg, favicon.ico, robots.txt)
+app.use(express.static(distPath, {
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
   },
+}));
+
+// 2. Restrictive API CORS: Only exact RENDER_EXTERNAL_URL, CLIENT_ORIGINS, and localhost
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    if (CLIENT_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    // Gracefully omit CORS headers for untrusted origins without throwing a 500 error
+    callback(null, false);
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-workspace-id'],
 }));
@@ -88,10 +128,6 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/settings', settingsRouter);
 
-// Serve frontend in production
-const distPath = path.resolve(process.cwd(), 'dist');
-app.use(express.static(distPath));
-
 // API 404 handler (ensures unknown API calls return JSON error rather than index.html)
 app.all('/api/*', (req, res) => {
   res.status(404).json({
@@ -100,13 +136,14 @@ app.all('/api/*', (req, res) => {
   });
 });
 
-// SPA fallback: Return index.html for all non-API/non-upload GET routes
+// SPA fallback: Return index.html with revalidation headers for all non-API/non-upload/non-asset GET routes
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/uploads')) {
+  if (req.path.startsWith('/uploads') || req.path.startsWith('/assets')) {
     return next();
   }
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.sendFile(indexPath);
   } else {
     res.status(503).json({
