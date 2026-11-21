@@ -58,6 +58,7 @@ function rowToCamel(obj: Record<string, any>): Record<string, any> {
  * Returns a partial DatabaseSchema with whatever tables exist and have data.
  */
 export async function loadFromSupabase(): Promise<Partial<DatabaseSchema>> {
+  if (process.env.NODE_ENV === 'test') return {};
   if (!isSupabaseConfigured()) return {};
 
   const supabase = getSupabaseClient();
@@ -91,6 +92,8 @@ export async function loadFromSupabase(): Promise<Partial<DatabaseSchema>> {
  * Uses fire-and-forget async to not block the synchronous save() call path.
  */
 export async function saveToSupabase(data: DatabaseSchema): Promise<void> {
+  // Skip persistence in test environment to avoid network calls
+  if (process.env.NODE_ENV === 'test') return;
   if (!isSupabaseConfigured()) return;
 
   const supabase = getSupabaseClient();

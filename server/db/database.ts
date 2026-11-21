@@ -102,18 +102,20 @@ class DatabaseManager {
         }
       }
 
-      // If Supabase is empty and local JSON had data, seed Supabase with the local data
+      // Only seed demo workspace in development/test if explicitly allowed (SEED_DEMO_DATA=true), never silently in production
       const hasAnyRemoteData = Object.values(remoteData).some(
         (arr) => Array.isArray(arr) && arr.length > 0
       );
-      if (!hasAnyRemoteData && this.data.businessWorkspaces.length === 0) {
-        console.log('[Database] Supabase is empty — seeding demo workspace...');
+      const shouldSeedDemo = process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO_DATA === 'true';
+      if (!hasAnyRemoteData && this.data.businessWorkspaces.length === 0 && shouldSeedDemo) {
+        console.log('[Database] Supabase is empty — seeding demo workspace for development...');
         this.seedApexDemoWorkspace();
-        // Push seed data to Supabase
         await saveToSupabase(this.data);
-      } else if (!hasAnyRemoteData && this.data.businessWorkspaces.length > 0) {
-        console.log('[Database] Pushing existing local data to Supabase...');
+      } else if (!hasAnyRemoteData && this.data.businessWorkspaces.length > 0 && shouldSeedDemo) {
+        console.log('[Database] Pushing local data to Supabase...');
         await saveToSupabase(this.data);
+      } else if (!hasAnyRemoteData) {
+        console.log('[Database] Supabase is empty — waiting for user onboarding (production clean mode).');
       }
 
       console.log('[Database] Supabase initialization complete.');
