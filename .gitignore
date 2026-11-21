@@ -1,8 +1,10 @@
 node_modules/
 dist/
 .env
-.env.*
-.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 uploads/
 server/data/*.json
 server/data/*.tmp

@@ -48,12 +48,12 @@ app.set('trust proxy', 1);
 
 // Session store: use Supabase Postgres (via DATABASE_URL) in production,
 // fall back to in-memory MemoryStore in test/dev when no DB URL is available.
+import connectPgSimple from 'connect-pg-simple';
+
 function buildSessionStore() {
   const databaseUrl = process.env.DATABASE_URL;
   if (process.env.NODE_ENV !== 'test' && databaseUrl) {
     try {
-      // Dynamic import so this doesn't break tests that have no DB
-      const connectPgSimple = require('connect-pg-simple');
       const PgStore = connectPgSimple(session);
       return new PgStore({
         conString: databaseUrl,
