@@ -46,18 +46,41 @@ const distPath = fs.existsSync(path.resolve(process.cwd(), 'dist', 'index.html')
 // Trust proxy when behind reverse proxy (e.g., Render, Vercel)
 app.set('trust proxy', 1);
 
-// Session configuration (production‑ready). In development you can keep the default MemoryStore,
-// but for a real deployment you should replace it with a persistent store (e.g., connect‑pg‑simple,
-// Redis, etc.). The cookie is configured for a 30‑minute lifespan and uses secure flags in production.
+// Session store: use Supabase Postgres (via DATABASE_URL) in production,
+// fall back to in-memory MemoryStore in test/dev when no DB URL is available.
+function buildSessionStore() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (process.env.NODE_ENV !== 'test' && databaseUrl) {
+    try {
+      // Dynamic import so this doesn't break tests that have no DB
+      const connectPgSimple = require('connect-pg-simple');
+      const PgStore = connectPgSimple(session);
+      return new PgStore({
+        conString: databaseUrl,
+        tableName: 'session',       // auto-created on first use
+        createTableIfMissing: true, // creates the sessions table automatically
+        ttl: 30 * 60,               // 30 minutes in seconds
+        pruneSessionInterval: 60,   // cleanup expired sessions every 60s
+      });
+    } catch (err: any) {
+      console.warn('[Session] connect-pg-simple unavailable, using MemoryStore:', err.message);
+    }
+  }
+  return undefined; // Express falls back to MemoryStore
+}
+
+// Session configuration — 30-minute cookie, secure flags in production,
+// Supabase Postgres as the persistent store when DATABASE_URL is set.
 app.use(
   session({
     name: 'econvyx.sid',
-    secret: process.env.SESSION_SECRET || 'change-this-secret',
+    secret: process.env.SESSION_SECRET || 'change-this-secret-in-production',
+    store: buildSessionStore(),
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // only over HTTPS in prod
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
       sameSite: 'strict',
       maxAge: 30 * 60 * 1000, // 30 minutes
     },
