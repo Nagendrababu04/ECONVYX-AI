@@ -267,13 +267,20 @@ describe('Live HTTP Server & Full API Lifecycle E2E Verification', { timeout: 25
 
   // 10. Production Asset Serving
   it('serves fingerprinted production assets and returns 404 for missing assets', async () => {
+    // Dynamically find current fingerprinted assets in dist/assets
+    const fs = await import('fs');
+    const path = await import('path');
+    const assetFiles = fs.readdirSync(path.resolve('dist/assets'));
+    const cssFile = assetFiles.find((f: string) => f.endsWith('.css')) || 'index-Bh5lhE-H.css';
+    const jsFile = assetFiles.find((f: string) => f.endsWith('.js')) || 'index-Cy73-hbD.js';
+
     // Current CSS asset
-    const cssRes = await fetch(`${baseUrl}/assets/index-Bh5lhE-H.css`);
+    const cssRes = await fetch(`${baseUrl}/assets/${cssFile}`);
     expect(cssRes.status).toBe(200);
     expect(cssRes.headers.get('content-type')).toContain('text/css');
 
     // Current JS asset
-    const jsRes = await fetch(`${baseUrl}/assets/index-ByywNCZo.js`);
+    const jsRes = await fetch(`${baseUrl}/assets/${jsFile}`);
     expect(jsRes.status).toBe(200);
     expect(jsRes.headers.get('content-type')).toContain('javascript');
 

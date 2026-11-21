@@ -55,7 +55,7 @@ export const OverviewPage: React.FC = () => {
     fetchOverview();
   }, [activeWorkspace?.id]);
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-20 bg-slate-200 rounded-xl" />
@@ -64,6 +64,14 @@ export const OverviewPage: React.FC = () => {
             <div key={i} className="h-32 bg-slate-200 rounded-xl" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-8 text-center text-xs text-slate-500">
+        Dashboard data is unavailable. Please verify your workspace connection or sign in again.
       </div>
     );
   }

@@ -36,6 +36,8 @@ export const ReceivablesPage: React.FC = () => {
 
   // Create Invoice Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
   const [createForm, setCreateForm] = useState({
     customerId: '',
     invoiceNumber: '',
@@ -78,8 +80,24 @@ export const ReceivablesPage: React.FC = () => {
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let targetCustomerId = createForm.customerId;
+      if (isCreatingCustomer || customers.length === 0) {
+        if (!newCustomerName.trim()) {
+          addToast({ type: 'warning', title: 'Customer Name Required', message: 'Please enter a customer name.' });
+          return;
+        }
+        const created = await api.createCustomer({ name: newCustomerName.trim() });
+        targetCustomerId = created.customer.id;
+        await fetchInvoices();
+      }
+
+      if (!targetCustomerId) {
+        addToast({ type: 'warning', title: 'Customer Required', message: 'Please select or enter a customer.' });
+        return;
+      }
+
       await api.createInvoice({
-        customerId: createForm.customerId,
+        customerId: targetCustomerId,
         invoiceNumber: createForm.invoiceNumber,
         issueDate: createForm.issueDate,
         dueDate: createForm.dueDate,
@@ -96,6 +114,8 @@ export const ReceivablesPage: React.FC = () => {
       });
       addToast({ type: 'success', title: 'Invoice Created', message: `Invoice #${createForm.invoiceNumber} recorded.` });
       setIsCreateModalOpen(false);
+      setNewCustomerName('');
+      setIsCreatingCustomer(false);
       await fetchInvoices();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Creation Failed', message: err.message });
@@ -217,7 +237,20 @@ export const ReceivablesPage: React.FC = () => {
         </div>
 
         <button
-          onClick={() => window.open('/api/reports/sales_invoices?format=csv', '_blank')}
+          onClick={async () => {
+            try {
+              const csvText = await api.getReport('sales_invoices', 'csv');
+              const blob = new Blob([csvText], { type: 'text/csv' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `sales_invoices_${Date.now()}.csv`;
+              a.click();
+              window.URL.revokeObjectURL(url);
+            } catch (err: any) {
+              addToast({ type: 'error', title: 'Export Failed', message: err.message || 'Could not export CSV.' });
+            }
+          }}
           className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors"
         >
           <Download className="w-3.5 h-3.5" />
@@ -319,18 +352,40 @@ export const ReceivablesPage: React.FC = () => {
             <form onSubmit={handleCreateInvoice} className="p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="font-semibold text-slate-700">Customer *</label>
-                  <select
-                    required
-                    value={createForm.customerId}
-                    onChange={(e) => setCreateForm({ ...createForm, customerId: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
-                  >
-                    <option value="">Select customer</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700">Customer *</label>
+                    {customers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingCustomer(!isCreatingCustomer)}
+                        className="text-[11px] text-brand-teal hover:underline font-semibold"
+                      >
+                        {isCreatingCustomer ? 'Select Existing' : '+ Add New'}
+                      </button>
+                    )}
+                  </div>
+                  {customers.length === 0 || isCreatingCustomer ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter customer legal name"
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={createForm.customerId}
+                      onChange={(e) => setCreateForm({ ...createForm, customerId: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
+                    >
+                      <option value="">Select customer</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700">Invoice Number *</label>

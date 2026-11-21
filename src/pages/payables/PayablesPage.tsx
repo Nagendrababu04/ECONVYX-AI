@@ -27,6 +27,8 @@ export const PayablesPage: React.FC = () => {
 
   // Modals
   const [isAddBillOpen, setIsAddBillOpen] = useState(false);
+  const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
   const [addBillForm, setAddBillForm] = useState({
     supplierId: '',
     billNumber: '',
@@ -63,9 +65,27 @@ export const PayablesPage: React.FC = () => {
   const handleCreateBill = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createBill(addBillForm);
+      let targetSupplierId = addBillForm.supplierId;
+      if (isCreatingSupplier || suppliers.length === 0) {
+        if (!newSupplierName.trim()) {
+          addToast({ type: 'warning', title: 'Supplier Name Required', message: 'Please enter a supplier name.' });
+          return;
+        }
+        const created = await api.createSupplier({ name: newSupplierName.trim() });
+        targetSupplierId = created.supplier.id;
+        await fetchPayables();
+      }
+
+      if (!targetSupplierId) {
+        addToast({ type: 'warning', title: 'Supplier Required', message: 'Please select or enter a supplier.' });
+        return;
+      }
+
+      await api.createBill({ ...addBillForm, supplierId: targetSupplierId });
       addToast({ type: 'success', title: 'Bill Recorded', message: `Bill #${addBillForm.billNumber} added to payables.` });
       setIsAddBillOpen(false);
+      setNewSupplierName('');
+      setIsCreatingSupplier(false);
       await fetchPayables();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Recording Failed', message: err.message });
@@ -243,18 +263,40 @@ export const PayablesPage: React.FC = () => {
             <form onSubmit={handleCreateBill} className="p-6 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="font-semibold text-slate-700">Supplier *</label>
-                  <select
-                    required
-                    value={addBillForm.supplierId}
-                    onChange={(e) => setAddBillForm({ ...addBillForm, supplierId: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
-                  >
-                    <option value="">Select supplier</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700">Supplier *</label>
+                    {suppliers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingSupplier(!isCreatingSupplier)}
+                        className="text-[11px] text-brand-teal hover:underline font-semibold"
+                      >
+                        {isCreatingSupplier ? 'Select Existing' : '+ Add New'}
+                      </button>
+                    )}
+                  </div>
+                  {suppliers.length === 0 || isCreatingSupplier ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter supplier legal name"
+                      value={newSupplierName}
+                      onChange={(e) => setNewSupplierName(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={addBillForm.supplierId}
+                      onChange={(e) => setAddBillForm({ ...addBillForm, supplierId: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
+                    >
+                      <option value="">Select supplier</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700">Bill Number *</label>

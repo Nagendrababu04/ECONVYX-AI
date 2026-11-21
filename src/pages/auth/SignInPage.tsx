@@ -17,6 +17,17 @@ export const SignInPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('expired') === 'true') {
+      addToast({
+        type: 'warning',
+        title: 'Session Expired',
+        message: 'Your session has expired. Please sign in again.',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) navigate('/', { replace: true });
   }, [isAuthenticated, navigate]);
 

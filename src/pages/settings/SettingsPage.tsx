@@ -61,8 +61,16 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  if (isLoading || !settingsData) {
+  if (isLoading) {
     return <div className="p-8 text-center text-xs text-slate-500 animate-pulse">Loading settings...</div>;
+  }
+
+  if (!settingsData) {
+    return (
+      <div className="p-8 text-center text-xs text-slate-500">
+        Settings could not be loaded. Please ensure you are signed in to an active workspace.
+      </div>
+    );
   }
 
   const { integrations, workspace } = settingsData;

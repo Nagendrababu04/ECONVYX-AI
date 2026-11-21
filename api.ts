@@ -45,6 +45,15 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
     } catch {
       // not JSON
     }
+
+    if (response.status === 401 && !endpoint.startsWith('/auth/login') && !endpoint.startsWith('/auth/register')) {
+      localStorage.removeItem('econvyx_token');
+      localStorage.removeItem('econvyx_active_workspace');
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/signin') && !window.location.pathname.startsWith('/signup')) {
+        window.location.href = '/signin?expired=true';
+      }
+    }
+
     throw new ApiError(errorMsg, response.status, errorData);
   }
 

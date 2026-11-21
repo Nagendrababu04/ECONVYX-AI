@@ -16,10 +16,11 @@ export interface AuthenticatedRequest extends Request {
 export function tenantAuthMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   // ── 1. Resolve authenticated user from JWT ──────────────────────────────
   const authHeader = req.headers.authorization;
+  const queryToken = req.query.token as string | undefined;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken;
   let resolvedUser: User | undefined;
 
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
+  if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       resolvedUser = db.getUsers().find((u) => u.id === decoded.userId);
@@ -35,7 +36,7 @@ export function tenantAuthMiddleware(req: AuthenticatedRequest, res: Response, n
   req.user = resolvedUser;
 
   // ── 2. Resolve active workspace scoped to this user ─────────────────────
-  const headerWorkspaceId = req.headers['x-workspace-id'] as string;
+  const headerWorkspaceId = (req.headers['x-workspace-id'] || req.query.workspaceId) as string | undefined;
   const userWorkspaces = db.getWorkspacesByUserId(resolvedUser.id);
 
   const targetWorkspace = headerWorkspaceId

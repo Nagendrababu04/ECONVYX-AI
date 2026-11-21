@@ -1,16 +1,6 @@
 {
   "users": [
     {
-      "id": "usr-admin-001",
-      "email": "admin@econvyx.ai",
-      "fullName": "Vikram Joshi",
-      "phone": "+91 98220 12345",
-      "passwordHash": "$2b$10$sVc.UjPzeWdNP7cS2W.0tevfozudW/miOwgSizr/tehs8eAtaiGRK",
-      "role": "owner",
-      "createdAt": "2026-01-01T00:00:00Z",
-      "updatedAt": "2026-01-01T00:00:00Z"
-    },
-    {
       "id": "usr-1795064585325-myu4b9",
       "email": "realuser_1795064584693@company.in",
       "fullName": "Sunil Verma",
@@ -119,13 +109,6 @@
     }
   ],
   "workspaceMembers": [
-    {
-      "id": "wm-demo-001",
-      "workspaceId": "ws-apex-demo-001",
-      "userId": "usr-admin-001",
-      "role": "owner",
-      "createdAt": "2026-01-01T00:00:00Z"
-    },
     {
       "id": "wm-1795064733838",
       "workspaceId": "ws-1795064733835-ue6r",

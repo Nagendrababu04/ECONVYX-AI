@@ -35,8 +35,16 @@ export const FinancialInsightsPage: React.FC = () => {
     fetchInsights();
   }, [activeWorkspace?.id]);
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <div className="p-8 text-center text-xs text-slate-500 animate-pulse">Computing financial intelligence metrics...</div>;
+  }
+
+  if (!data) {
+    return (
+      <div className="p-8 text-center text-xs text-slate-500">
+        No financial insight data available for this workspace yet. Add invoices and bills to generate analytics.
+      </div>
+    );
   }
 
   const { metrics, insights } = data;
