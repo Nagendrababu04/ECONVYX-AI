@@ -191,4 +191,37 @@ router.post('/:id/confirm', (req: AuthenticatedRequest, res: Response) => {
   });
 });
 
+// 5. Delete Document
+router.delete('/:id', (req: AuthenticatedRequest, res: Response) => {
+  const workspaceId = req.workspaceId!;
+  const docId = req.params.id;
+  const doc = db.getDocuments(workspaceId).find((d) => d.id === docId);
+
+  if (!doc) {
+    return res.status(404).json({ error: 'Document not found or access denied.' });
+  }
+
+  try {
+    const resolvedPath = path.resolve(doc.filePath);
+    if (fs.existsSync(resolvedPath)) {
+      fs.unlinkSync(resolvedPath);
+    }
+  } catch (err) {
+    console.warn('Failed to delete physical file on disk', err);
+  }
+
+  db.deleteDocument(docId, workspaceId);
+
+  db.addAuditLog({
+    workspaceId,
+    userEmail: req.user?.email || 'user',
+    action: 'DOCUMENT_DELETED',
+    entityType: 'document',
+    entityId: docId,
+    details: `Document "${doc.originalName}" was deleted from workspace by user.`,
+  });
+
+  return res.json({ message: 'Document deleted successfully.' });
+});
+
 export default router;

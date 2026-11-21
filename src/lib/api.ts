@@ -65,6 +65,21 @@ export const api = {
     request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  forgotPassword: (email: string) =>
+    request<{ message: string; resetUrl?: string; token?: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  verifyResetToken: (token: string) =>
+    request<{ valid: boolean; email: string }>('/auth/verify-reset-token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
   getMe: () => request('/auth/me'),
   getMicrosoftAuthStatus: () => request('/auth/microsoft/status'),
   getWorkspaces: () => request('/workspaces'),
@@ -86,6 +101,8 @@ export const api = {
     request(`/documents/${id}/fields`, { method: 'PATCH', body: JSON.stringify(data) }),
   confirmDocument: (id: string) =>
     request(`/documents/${id}/confirm`, { method: 'POST' }),
+  deleteDocument: (id: string) =>
+    request(`/documents/${id}`, { method: 'DELETE' }),
 
   // Verification Centre
   getVerificationCases: () => request('/verification'),
@@ -164,4 +181,14 @@ export const api = {
   // Settings
   getSettings: () => request('/settings'),
   resetDemoWorkspace: () => request('/settings/reset-demo', { method: 'POST' }),
+
+  // Notifications
+  getNotifications: () =>
+    request<{ notifications: any[]; unreadCount: number; total: number }>('/notifications'),
+  markNotificationRead: (id: string) =>
+    request<{ message: string; unreadCount: number }>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsRead: () =>
+    request<{ message: string; unreadCount: number }>('/notifications/mark-all-read', { method: 'POST' }),
+  deleteNotification: (id: string) =>
+    request<{ message: string; unreadCount: number }>(`/notifications/${id}`, { method: 'DELETE' }),
 };

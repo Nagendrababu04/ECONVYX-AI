@@ -31,6 +31,7 @@ import insightsRouter from './routes/insights.js';
 import reportsRouter from './routes/reports.js';
 import auditRouter from './routes/audit.js';
 import settingsRouter from './routes/settings.js';
+import notificationsRouter from './routes/notifications.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -127,6 +128,7 @@ app.use('/api/insights', insightsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // API 404 handler (ensures unknown API calls return JSON error rather than index.html)
 app.all('/api/*', (req, res) => {
@@ -162,12 +164,21 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 ECONVYX AI Platform Backend is operational`);
-  console.log(`⚡ Binding: ${HOST}:${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 Tenant Isolation & Deterministic Engine: ACTIVE`);
-  console.log(`=======================================================`);
-});
+import { db } from './db/database.js';
+
+if (process.env.NODE_ENV !== 'test') {
+  db.init().then(() => {
+    app.listen(PORT, HOST, () => {
+      console.log(`=======================================================`);
+      console.log(`🚀 ECONVYX AI Platform Backend is operational`);
+      console.log(`⚡ Binding: ${HOST}:${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔒 Tenant Isolation & Deterministic Engine: ACTIVE`);
+      console.log(`=======================================================`);
+    });
+  }).catch((err) => {
+    console.error('Failed to initialize database on startup:', err);
+    process.exit(1);
+  });
+}
 
 export default app;

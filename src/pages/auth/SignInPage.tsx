@@ -78,6 +78,12 @@ export const SignInPage: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-slate-300">Password</label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-[#12B8A6] hover:text-[#69E0D0] font-medium transition-colors"
+                >
+                  Forgot password?
+                </Link>
               </div>
               <div className="relative">
                 <input

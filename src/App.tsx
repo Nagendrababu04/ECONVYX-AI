@@ -9,6 +9,8 @@ import { AppShell } from './components/layout/AppShell.js';
 // Pages
 import { SignInPage } from './pages/auth/SignInPage.js';
 import { SignUpPage } from './pages/auth/SignUpPage.js';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage.js';
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage.js';
 import { GoogleCallbackPage } from './pages/auth/GoogleCallbackPage.js';
 import { OnboardingPage } from './pages/auth/OnboardingPage.js';
 import { OverviewPage } from './pages/overview/OverviewPage.js';
@@ -37,6 +39,8 @@ export function App() {
             {/* Public / Auth Routes */}
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth/oauth-callback" element={<GoogleCallbackPage />} />
             <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />

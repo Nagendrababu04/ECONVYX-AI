@@ -3,7 +3,10 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import 'dotenv/config';
+import { isSupabaseConfigured } from './supabaseClient.js';
+import { loadFromSupabase, saveToSupabase, deleteFromSupabase } from './supabaseAdapter.js';
 import {
   User,
   BusinessWorkspace,
@@ -22,6 +25,8 @@ import {
   CashFlowScenario,
   Reminder,
   AuditLog,
+  AppNotification,
+  PasswordResetToken,
 } from '../types/index.js';
 
 export interface DatabaseSchema {
@@ -42,6 +47,8 @@ export interface DatabaseSchema {
   cashFlowScenarios: CashFlowScenario[];
   reminders: Reminder[];
   auditLogs: AuditLog[];
+  notifications: AppNotification[];
+  passwordResetTokens: PasswordResetToken[];
 }
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || 'server/data');
@@ -50,12 +57,58 @@ const DATA_FILE = path.join(DATA_DIR, 'econvyx_data.json');
 class DatabaseManager {
   private data: DatabaseSchema;
   private isSaving: boolean = false;
+  private useSupabase: boolean = false;
+  private supabaseSaveQueued: boolean = false;
 
   constructor() {
     this.ensureDirectory();
     this.data = this.loadData();
-    if (this.data.businessWorkspaces.length === 0) {
+    this.useSupabase = isSupabaseConfigured();
+    if (this.data.businessWorkspaces.length === 0 && !this.useSupabase) {
       this.seedApexDemoWorkspace();
+    }
+  }
+
+  /**
+   * Async initialization: loads data from Supabase if configured.
+   * Must be called (and awaited) before the server starts accepting requests.
+   */
+  public async init(): Promise<void> {
+    if (!this.useSupabase) {
+      console.log('[Database] Using local JSON file persistence.');
+      return;
+    }
+
+    console.log('[Database] Supabase configured — loading data from remote database...');
+    try {
+      const remoteData = await loadFromSupabase();
+
+      // Merge remote data into in-memory store (remote takes precedence)
+      for (const key of Object.keys(remoteData) as (keyof DatabaseSchema)[]) {
+        const remoteRecords = (remoteData as any)[key];
+        if (remoteRecords && Array.isArray(remoteRecords) && remoteRecords.length > 0) {
+          (this.data as any)[key] = remoteRecords;
+        }
+      }
+
+      // If Supabase is empty and local JSON had data, seed Supabase with the local data
+      const hasAnyRemoteData = Object.values(remoteData).some(
+        (arr) => Array.isArray(arr) && arr.length > 0
+      );
+      if (!hasAnyRemoteData && this.data.businessWorkspaces.length === 0) {
+        console.log('[Database] Supabase is empty — seeding demo workspace...');
+        this.seedApexDemoWorkspace();
+        // Push seed data to Supabase
+        await saveToSupabase(this.data);
+      } else if (!hasAnyRemoteData && this.data.businessWorkspaces.length > 0) {
+        console.log('[Database] Pushing existing local data to Supabase...');
+        await saveToSupabase(this.data);
+      }
+
+      console.log('[Database] Supabase initialization complete.');
+    } catch (err: any) {
+      console.error('[Database] Supabase init failed, falling back to local JSON:', err.message);
+      this.useSupabase = false;
     }
   }
 
@@ -69,7 +122,10 @@ class DatabaseManager {
     try {
       if (fs.existsSync(DATA_FILE)) {
         const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-        return JSON.parse(fileContent);
+        const parsed = JSON.parse(fileContent);
+        parsed.notifications = parsed.notifications || [];
+        parsed.passwordResetTokens = parsed.passwordResetTokens || [];
+        return parsed;
       }
     } catch (err) {
       console.warn('Could not read persistent data file, initializing fresh store.', err);
@@ -93,6 +149,8 @@ class DatabaseManager {
       cashFlowScenarios: [],
       reminders: [],
       auditLogs: [],
+      notifications: [],
+      passwordResetTokens: [],
     };
   }
 
@@ -101,13 +159,34 @@ class DatabaseManager {
     this.isSaving = true;
     try {
       this.ensureDirectory();
-      const tmpFile = `${DATA_FILE}.tmp`;
+      const tmpFile = `${DATA_FILE}.${process.pid}.${Date.now()}.tmp`;
       fs.writeFileSync(tmpFile, JSON.stringify(this.data, null, 2), 'utf-8');
-      fs.renameSync(tmpFile, DATA_FILE);
+      try {
+        fs.copyFileSync(tmpFile, DATA_FILE);
+        try {
+          fs.unlinkSync(tmpFile);
+        } catch {}
+      } catch {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+        try {
+          if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        } catch {}
+      }
     } catch (err) {
       console.error('Failed to atomically write persistent database file', err);
     } finally {
       this.isSaving = false;
+    }
+
+    // Async persist to Supabase (fire-and-forget, non-blocking)
+    if (this.useSupabase && !this.supabaseSaveQueued) {
+      this.supabaseSaveQueued = true;
+      setTimeout(() => {
+        this.supabaseSaveQueued = false;
+        saveToSupabase(this.data).catch((err) =>
+          console.warn('[Database] Background Supabase sync failed:', err.message)
+        );
+      }, 100);
     }
   }
 
@@ -387,6 +466,127 @@ class DatabaseManager {
     this.data.auditLogs.unshift(newLog);
     this.save();
     return newLog;
+  }
+
+  // --- Notifications ---
+  public getNotifications(userId: string, workspaceId?: string): AppNotification[] {
+    return (this.data.notifications || [])
+      .filter((n) => n.userId === userId && (!workspaceId || !n.workspaceId || n.workspaceId === workspaceId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  public addNotification(notification: Omit<AppNotification, 'id' | 'createdAt' | 'isRead'> & { isRead?: boolean }): AppNotification {
+    this.data.notifications = this.data.notifications || [];
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+      isRead: notification.isRead || false,
+      ...notification,
+    };
+    this.data.notifications.unshift(newNotif);
+    this.save();
+    return newNotif;
+  }
+
+  public markNotificationAsRead(id: string, userId: string): boolean {
+    this.data.notifications = this.data.notifications || [];
+    const notif = this.data.notifications.find((n) => n.id === id && n.userId === userId);
+    if (notif) {
+      notif.isRead = true;
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  public markAllNotificationsAsRead(userId: string, workspaceId?: string): number {
+    this.data.notifications = this.data.notifications || [];
+    let count = 0;
+    for (const notif of this.data.notifications) {
+      if (notif.userId === userId && (!workspaceId || !notif.workspaceId || notif.workspaceId === workspaceId) && !notif.isRead) {
+        notif.isRead = true;
+        count++;
+      }
+    }
+    if (count > 0) this.save();
+    return count;
+  }
+
+  public deleteNotification(id: string, userId: string): boolean {
+    this.data.notifications = this.data.notifications || [];
+    const idx = this.data.notifications.findIndex((n) => n.id === id && n.userId === userId);
+    if (idx !== -1) {
+      this.data.notifications.splice(idx, 1);
+      this.save();
+      if (this.useSupabase) deleteFromSupabase('notifications', id).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  public deleteDocument(id: string, workspaceId: string): boolean {
+    const idx = this.data.documents.findIndex((d) => d.id === id && d.workspaceId === workspaceId);
+    if (idx !== -1) {
+      this.data.documents.splice(idx, 1);
+      this.save();
+      if (this.useSupabase) deleteFromSupabase('documents', id).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  // --- Password Reset ---
+  public createPasswordResetToken(email: string): { token: string; expiresAt: number; userId: string } | null {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = this.data.users.find((u) => u.email === normalizedEmail);
+    if (!user) return null;
+
+    this.data.passwordResetTokens = this.data.passwordResetTokens || [];
+    for (const t of this.data.passwordResetTokens) {
+      if (t.userId === user.id) t.used = true;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+    const resetRecord: PasswordResetToken = {
+      token,
+      userId: user.id,
+      email: user.email,
+      expiresAt,
+      used: false,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.passwordResetTokens.push(resetRecord);
+    this.save();
+    return { token, expiresAt, userId: user.id };
+  }
+
+  public verifyPasswordResetToken(token: string): PasswordResetToken | null {
+    this.data.passwordResetTokens = this.data.passwordResetTokens || [];
+    const record = this.data.passwordResetTokens.find(
+      (t) => t.token === token && !t.used && t.expiresAt > Date.now()
+    );
+    return record || null;
+  }
+
+  public usePasswordResetToken(token: string): boolean {
+    this.data.passwordResetTokens = this.data.passwordResetTokens || [];
+    const record = this.data.passwordResetTokens.find(
+      (t) => t.token === token && !t.used && t.expiresAt > Date.now()
+    );
+    if (!record) return false;
+    record.used = true;
+    this.save();
+    return true;
+  }
+
+  public updateUserPassword(userId: string, newPasswordHash: string): boolean {
+    const user = this.data.users.find((u) => u.id === userId);
+    if (!user) return false;
+    user.passwordHash = newPasswordHash;
+    user.updatedAt = new Date().toISOString();
+    this.save();
+    return true;
   }
 
   // --- Production Workspace Seeding ---

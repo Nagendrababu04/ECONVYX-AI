@@ -155,4 +155,115 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
   });
 });
 
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  const result = db.createPasswordResetToken(email);
+  if (result) {
+    db.addAuditLog({
+      workspaceId: 'global',
+      userEmail: email.trim().toLowerCase(),
+      action: 'PASSWORD_RESET_REQUESTED',
+      entityType: 'user',
+      entityId: result.userId,
+      details: 'Password reset token generated. Valid for 1 hour.',
+    });
+  }
+
+  return res.json({
+    message: 'If an account with that email exists, password reset instructions have been generated.',
+    resetUrl: result ? `/reset-password?token=${result.token}` : undefined,
+    token: result ? result.token : undefined,
+  });
+});
+
+// POST /api/auth/verify-reset-token
+router.post('/verify-reset-token', (req: Request, res: Response) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Reset token is required.' });
+  }
+  const record = db.verifyPasswordResetToken(token);
+  if (!record) {
+    return res.status(400).json({ error: 'This password reset link is invalid or has expired.' });
+  }
+  return res.json({ valid: true, email: record.email });
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Reset token is required.' });
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+  }
+
+  const record = db.verifyPasswordResetToken(token);
+  if (!record) {
+    return res.status(400).json({ error: 'This password reset link is invalid or has expired.' });
+  }
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    db.updateUserPassword(record.userId, passwordHash);
+    db.usePasswordResetToken(token);
+
+    db.addAuditLog({
+      workspaceId: 'global',
+      userEmail: record.email,
+      action: 'PASSWORD_RESET_COMPLETED',
+      entityType: 'user',
+      entityId: record.userId,
+      details: 'Password successfully reset using secure token.',
+    });
+
+    return res.json({ message: 'Password has been successfully reset. Please sign in with your new password.' });
+  } catch {
+    return res.status(500).json({ error: 'Failed to reset password. Please try again.' });
+  }
+});
+
+// POST /api/auth/change-password
+router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+  const user = (req as any).currentUser as User;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required.' });
+  }
+
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters long.' });
+  }
+
+  if (!user.passwordHash) {
+    return res.status(400).json({ error: 'Cannot change password for this account.' });
+  }
+
+  const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!matches) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  db.updateUserPassword(user.id, newHash);
+
+  db.addAuditLog({
+    workspaceId: 'global',
+    userEmail: user.email,
+    action: 'PASSWORD_CHANGED',
+    entityType: 'user',
+    entityId: user.id,
+    details: 'User changed password from account settings.',
+  });
+
+  return res.json({ message: 'Password successfully updated.' });
+});
+
 export default router;

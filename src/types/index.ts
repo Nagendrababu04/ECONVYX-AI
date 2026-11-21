@@ -358,3 +358,24 @@ export interface AuditLog {
   details: string;
   createdAt: string;
 }
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  workspaceId?: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'danger';
+  link?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface PasswordResetToken {
+  token: string;
+  userId: string;
+  email: string;
+  expiresAt: number;
+  used: boolean;
+  createdAt: string;
+}

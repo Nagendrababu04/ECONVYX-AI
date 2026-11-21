@@ -1,6 +1,6 @@
 // Top Navigation Bar Component
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Search,
@@ -13,9 +13,13 @@ import {
   Shield,
   CheckCircle2,
   AlertTriangle,
+  Info,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../lib/api.js';
+import { formatDate } from '../../lib/utils.js';
 
 interface TopbarProps {
   onOpenMobileSidebar: () => void;
@@ -32,6 +36,65 @@ export const Topbar: React.FC<TopbarProps> = ({
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.getNotifications();
+      if (res) {
+        setNotifications(res.notifications || []);
+        setUnreadCount(res.unreadCount || 0);
+      }
+    } catch {
+      // Quiet fail if not authenticated
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [user?.id, activeWorkspace?.id]);
+
+  const handleMarkAsRead = async (id: string, link?: string) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+      setIsNotificationsOpen(false);
+      if (link) {
+        navigate(link);
+      }
+    } catch (err) {
+      console.error('Failed to mark notification read', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all notifications read', err);
+    }
+  };
+
+  const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await api.deleteNotification(id);
+      const deleted = notifications.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      if (deleted && !deleted.isRead) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
+    } catch (err) {
+      console.error('Failed to delete notification', err);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 sm:px-6 bg-white border-b border-brand-border shadow-xs">
@@ -135,52 +198,86 @@ export const Topbar: React.FC<TopbarProps> = ({
               setIsWorkspaceMenuOpen(false);
               setIsUserMenuOpen(false);
             }}
-            className="relative p-2 text-slate-600 hover:text-brand-primary-navy hover:bg-slate-100 rounded-lg"
+            className="relative p-2 text-slate-600 hover:text-brand-primary-navy hover:bg-slate-100 rounded-lg transition-colors"
             aria-label="View notifications"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-danger rounded-full ring-2 ring-white" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-brand-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {isNotificationsOpen && (
             <div className="absolute right-0 mt-2 w-80 bg-white border border-brand-border rounded-lg shadow-elevated py-2 z-50">
               <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100">
                 <span className="text-xs font-bold text-slate-800">Financial Notifications</span>
-                <span className="text-[10px] font-semibold text-brand-teal bg-teal-50 px-1.5 py-0.5 rounded">
-                  2 Pending
-                </span>
+                {unreadCount > 0 ? (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="text-[10px] font-semibold text-brand-teal hover:underline bg-teal-50 px-1.5 py-0.5 rounded transition-colors"
+                  >
+                    {unreadCount} Unread &bull; Mark all read
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-slate-400">0 Unread</span>
+                )}
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
-                <div
-                  onClick={() => {
-                    setIsNotificationsOpen(false);
-                    navigate('/verification');
-                  }}
-                  className="p-3 hover:bg-slate-50 cursor-pointer flex gap-2.5 items-start"
-                >
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-slate-800">Document Discrepancy Flagged</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
-                      Case VC-2026-101: 20 units quantity mismatch (₹1,00,000 difference).
-                    </div>
+
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 text-xs">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-xs">
+                    <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <div className="font-bold text-slate-700">No Notifications Yet</div>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-[200px] mx-auto leading-relaxed">
+                      You're all caught up! New notifications will appear here when available.
+                    </p>
                   </div>
-                </div>
-                <div
-                  onClick={() => {
-                    setIsNotificationsOpen(false);
-                    navigate('/reconciliation');
-                  }}
-                  className="p-3 hover:bg-slate-50 cursor-pointer flex gap-2.5 items-start"
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-slate-800">Reconciliation Match Available</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
-                      ₹1,00,000 NEFT credit matched with INV-102 (96% confidence).
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => handleMarkAsRead(n.id, n.link)}
+                      className={`p-3 hover:bg-slate-50 cursor-pointer flex gap-2.5 items-start transition-colors ${
+                        !n.isRead ? 'bg-teal-50/20' : ''
+                      }`}
+                    >
+                      {n.type === 'warning' ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      ) : n.type === 'danger' ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                      ) : n.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      ) : (
+                        <Info className="w-4 h-4 text-brand-teal shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={`truncate text-xs ${!n.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                            {n.title}
+                          </span>
+                          {!n.isRead && (
+                            <span className="w-1.5 h-1.5 bg-brand-teal rounded-full shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                          {n.message}
+                        </p>
+                        <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                          <span>{formatDate(n.createdAt)}</span>
+                          <button
+                            onClick={(e) => handleDeleteNotification(e, n.id)}
+                            className="text-slate-400 hover:text-rose-600 p-0.5 rounded transition-colors"
+                            title="Delete notification"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  ))
+                )}
               </div>
             </div>
           )}
