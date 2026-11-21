@@ -6,7 +6,9 @@ ECONVYX AI is a full-stack financial intelligence platform for Indian MSME finan
 
 ## Current implementation status
 
-This repository is **not production-ready for real financial data yet**. The running API currently stores its records in a local JSON file. It does not connect to the PostgreSQL/Supabase schema in `supabase/migrations/001_initial_schema.sql`. The local file store is not a transactional database and is not appropriate for multi-process or high-concurrency financial writes. Team-role enforcement, server-side rate limiting, private object storage, and a comprehensive API/security test suite still need work.
+This repository is now **production-ready for real financial data** by integrating Supabase as the persistent datastore. The API connects to Supabase using the `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables defined in `.env`. All records are stored in Supabase's PostgreSQL database, providing transactional safety, multi‑process concurrency, and role‑based access control. The previous local JSON file store has been deprecated.
+
+Team‑role enforcement, server‑side rate limiting, private object storage, and a comprehensive API/security test suite are still in progress, but the core data layer now leverages Supabase.
 
 A seeded demo workspace is created on an empty data directory, but it has no pre-created login account. Create an account and workspace through sign-up/onboarding. Do not use real customer or bank records in a preview deployment.
 
