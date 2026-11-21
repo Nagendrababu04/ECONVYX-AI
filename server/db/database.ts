@@ -553,7 +553,7 @@ class DatabaseManager {
   }
 
   // --- Password Reset ---
-  public createPasswordResetToken(email: string): { token: string; expiresAt: number; userId: string } | null {
+  public createPasswordResetToken(email: string): { token: string; otp: string; expiresAt: number; userId: string } | null {
     const normalizedEmail = email.trim().toLowerCase();
     const user = this.data.users.find((u) => u.email === normalizedEmail);
     if (!user) return null;
@@ -564,9 +564,12 @@ class DatabaseManager {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
+    // Generate secure 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
     const resetRecord: PasswordResetToken = {
       token,
+      otp,
       userId: user.id,
       email: user.email,
       expiresAt,
@@ -575,21 +578,24 @@ class DatabaseManager {
     };
     this.data.passwordResetTokens.push(resetRecord);
     this.save();
-    return { token, expiresAt, userId: user.id };
+    return { token, otp, expiresAt, userId: user.id };
   }
 
-  public verifyPasswordResetToken(token: string): PasswordResetToken | null {
+  public verifyPasswordResetToken(tokenOrOtp: string, email?: string): PasswordResetToken | null {
     this.data.passwordResetTokens = this.data.passwordResetTokens || [];
-    const record = this.data.passwordResetTokens.find(
-      (t) => t.token === token && !t.used && t.expiresAt > Date.now()
-    );
+    const normalizedEmail = email ? email.trim().toLowerCase() : undefined;
+    const record = this.data.passwordResetTokens.find((t) => {
+      const matchToken = t.token === tokenOrOtp;
+      const matchOtp = t.otp === tokenOrOtp && (!normalizedEmail || t.email === normalizedEmail);
+      return (matchToken || matchOtp) && !t.used && t.expiresAt > Date.now();
+    });
     return record || null;
   }
 
-  public usePasswordResetToken(token: string): boolean {
+  public usePasswordResetToken(tokenOrOtp: string): boolean {
     this.data.passwordResetTokens = this.data.passwordResetTokens || [];
     const record = this.data.passwordResetTokens.find(
-      (t) => t.token === token && !t.used && t.expiresAt > Date.now()
+      (t) => (t.token === tokenOrOtp || t.otp === tokenOrOtp) && !t.used && t.expiresAt > Date.now()
     );
     if (!record) return false;
     record.used = true;

@@ -96,12 +96,12 @@ export const ForgotPasswordPage: React.FC = () => {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Sending Instructions...</span>
+                      <span>Sending Verification Code...</span>
                     </>
                   ) : (
                     <>
                       <Mail className="w-4 h-4" />
-                      <span>Send Reset Link</span>
+                      <span>Send 6-Digit OTP & Reset Link</span>
                     </>
                   )}
                 </button>
@@ -112,25 +112,32 @@ export const ForgotPasswordPage: React.FC = () => {
               <div className="w-12 h-12 bg-teal-500/10 border border-teal-500/20 text-[#12B8A6] rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-white">Check your inbox</h3>
+              <h3 className="text-base font-bold text-white">Verification Code Sent!</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                If an account exists with <strong className="text-white">{email}</strong>, you will receive password reset instructions.
+                We sent a <strong>6-digit OTP code</strong> and reset link to <strong className="text-white">{email}</strong>.
               </p>
 
+              <div className="pt-2">
+                <Link
+                  to={`/reset-password?email=${encodeURIComponent(email)}`}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[#12B8A6] to-[#0D9488] hover:from-[#0D9488] hover:to-[#0F766E] transition-all shadow-lg shadow-[#12B8A6]/20"
+                >
+                  <span>Enter 6-Digit OTP Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+
               {resetUrl && (
-                <div className="p-4 bg-teal-950/40 border border-teal-800/60 rounded-xl text-left text-xs space-y-2 mt-4">
-                  <div className="font-semibold text-[#69E0D0] flex items-center gap-1.5">
-                    <span>Direct Reset Link Generated</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300">
-                    Use this direct link to complete your password reset:
+                <div className="p-3 bg-slate-900/60 border border-slate-700/60 rounded-xl text-left text-xs space-y-1.5 mt-2">
+                  <p className="text-[11px] text-slate-400">
+                    Or click direct link:
                   </p>
                   <Link
                     to={resetUrl}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#12B8A6] hover:bg-[#0D9488] text-white font-semibold rounded-lg text-xs transition-colors"
+                    className="text-[#69E0D0] hover:underline text-xs flex items-center gap-1 font-medium"
                   >
-                    <span>Proceed to Reset Password</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Reset with 1-click token</span>
+                    <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
               )}

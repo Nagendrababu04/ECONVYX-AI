@@ -27,11 +27,21 @@ function createTransporter() {
 const FROM_NAME = process.env.EMAIL_FROM_NAME || 'ECONVYX AI';
 const FROM_EMAIL = process.env.SMTP_USER || 'noreply@econvyx.ai';
 
-export async function sendPasswordResetEmail(toEmail: string, resetUrl: string): Promise<boolean> {
+export async function sendPasswordResetEmail(toEmail: string, resetUrl: string, otp?: string): Promise<boolean> {
   if (process.env.NODE_ENV === 'test') return true; // skip in tests
 
   const transporter = createTransporter();
   if (!transporter) return false;
+
+  const otpHtml = otp
+    ? `
+      <div style="background:#f1f5f9;border:2px dashed #0284c7;border-radius:10px;padding:20px;text-align:center;margin:24px 0;">
+        <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Your 6-Digit Verification Code</p>
+        <span style="font-family:'Courier New',Courier,monospace;font-size:36px;font-weight:800;letter-spacing:8px;color:#0369a1;">${otp}</span>
+        <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;">Enter this code on the password reset screen.</p>
+      </div>
+    `
+    : '';
 
   const html = `
 <!DOCTYPE html>
@@ -49,29 +59,27 @@ export async function sendPasswordResetEmail(toEmail: string, resetUrl: string):
         <!-- Body -->
         <tr><td style="padding:40px;">
           <h2 style="margin:0 0 16px;color:#1e293b;font-size:20px;">Reset Your Password</h2>
-          <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.6;">
+          <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
             We received a request to reset the password for your ECONVYX AI account associated with <strong>${toEmail}</strong>.
           </p>
-          <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.6;">
-            Click the button below to set a new password. This link is valid for <strong>1 hour</strong>.
+          ${otpHtml}
+          <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+            Alternatively, click the button below to directly reset your password:
           </p>
-          <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
             <tr><td style="background:#1a56db;border-radius:8px;text-align:center;">
               <a href="${resetUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;">
-                Reset Password →
+                Reset Password Directly →
               </a>
             </td></tr>
           </table>
           <p style="margin:0 0 8px;color:#94a3b8;font-size:13px;">
-            If the button doesn't work, copy and paste this link into your browser:
+            Direct Link: <a href="${resetUrl}" style="color:#1a56db;font-size:13px;word-break:break-all;">${resetUrl}</a>
           </p>
-          <p style="margin:0 0 32px;word-break:break-all;">
-            <a href="${resetUrl}" style="color:#1a56db;font-size:13px;">${resetUrl}</a>
-          </p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;">
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
           <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.6;">
             If you didn't request a password reset, you can safely ignore this email — your password will not change.<br>
-            For security, this link expires in 1 hour.
+            For security, this code and link expire in 1 hour.
           </p>
         </td></tr>
         <!-- Footer -->
@@ -88,11 +96,13 @@ export async function sendPasswordResetEmail(toEmail: string, resetUrl: string):
     await transporter.sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: toEmail,
-      subject: 'Reset Your ECONVYX AI Password',
-      text: `Reset your ECONVYX AI password by visiting: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+      subject: otp ? `${otp} is your ECONVYX AI verification code` : 'Reset Your ECONVYX AI Password',
+      text: otp
+        ? `Your ECONVYX AI password reset code is: ${otp}\n\nAlternatively, reset directly at: ${resetUrl}\n\nValid for 1 hour.`
+        : `Reset your ECONVYX AI password by visiting: ${resetUrl}\n\nThis link expires in 1 hour.`,
       html,
     });
-    console.log(`[Email] Password reset email sent to ${toEmail}`);
+    console.log(`[Email] Password reset email with OTP sent to ${toEmail}`);
     return true;
   } catch (err: any) {
     console.error('[Email] Failed to send password reset email:', err.message);

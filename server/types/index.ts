@@ -393,6 +393,7 @@ export interface PasswordResetToken {
   token: string;
   userId: string;
   email: string;
+  otp?: string;
   expiresAt: number;
   used: boolean;
   createdAt: string;

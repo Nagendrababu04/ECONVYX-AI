@@ -75,19 +75,19 @@ export const api = {
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
   forgotPassword: (email: string) =>
-    request<{ message: string; resetUrl?: string; token?: string }>('/auth/forgot-password', {
+    request<{ message: string; resetUrl?: string; token?: string; otp?: string }>('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
-  verifyResetToken: (token: string) =>
-    request<{ valid: boolean; email: string }>('/auth/verify-reset-token', {
+  verifyResetToken: (tokenOrOtp: string, email?: string) =>
+    request<{ valid: boolean; email: string; token?: string }>('/auth/verify-reset-token', {
       method: 'POST',
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token: tokenOrOtp, otp: tokenOrOtp, email }),
     }),
-  resetPassword: (token: string, newPassword: string) =>
+  resetPassword: (tokenOrOtp: string, newPassword: string, email?: string) =>
     request<{ message: string }>('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ token, newPassword }),
+      body: JSON.stringify({ token: tokenOrOtp, otp: tokenOrOtp, newPassword, email }),
     }),
   getMe: () => request('/auth/me'),
   getMicrosoftAuthStatus: () => request('/auth/microsoft/status'),

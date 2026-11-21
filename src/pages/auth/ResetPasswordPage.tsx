@@ -12,11 +12,16 @@ export const ResetPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { addToast } = useToast();
 
-  const token = searchParams.get('token') || '';
+  const initialToken = searchParams.get('token') || '';
+  const emailParam = searchParams.get('email') || '';
 
-  const [isVerifying, setIsVerifying] = useState(true);
+  const [token, setToken] = useState(initialToken);
+  const [otpCode, setOtpCode] = useState('');
+  const [userEmail, setUserEmail] = useState(emailParam);
+
+  const [isVerifying, setIsVerifying] = useState(Boolean(initialToken));
   const [isValidToken, setIsValidToken] = useState(false);
-  const [targetEmail, setTargetEmail] = useState('');
+  const [targetEmail, setTargetEmail] = useState(emailParam);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,15 +30,15 @@ export const ResetPasswordPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // If token is in URL, verify it directly
   useEffect(() => {
+    if (!initialToken) {
+      setIsVerifying(false);
+      return;
+    }
     const verify = async () => {
-      if (!token) {
-        setIsVerifying(false);
-        setIsValidToken(false);
-        return;
-      }
       try {
-        const res = await api.verifyResetToken(token);
+        const res = await api.verifyResetToken(initialToken, emailParam);
         if (res.valid) {
           setIsValidToken(true);
           setTargetEmail(res.email);
@@ -45,7 +50,43 @@ export const ResetPasswordPage: React.FC = () => {
       }
     };
     verify();
-  }, [token]);
+  }, [initialToken, emailParam]);
+
+  // Handler for manual 6-digit OTP verification
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim() || otpCode.trim().length < 6) {
+      addToast({
+        type: 'warning',
+        title: '6-Digit OTP Required',
+        message: 'Please enter the 6-digit code received on your email.',
+      });
+      return;
+    }
+
+    try {
+      setIsVerifying(true);
+      const res = await api.verifyResetToken(otpCode.trim(), userEmail.trim());
+      if (res.valid) {
+        setToken(res.token || otpCode.trim());
+        setIsValidToken(true);
+        setTargetEmail(res.email);
+        addToast({
+          type: 'success',
+          title: 'Code Verified',
+          message: 'OTP verified successfully. You can now set your new password.',
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Verification Failed',
+        message: err.message || 'Invalid or expired 6-digit OTP code.',
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const passwordStrength = (() => {
     if (newPassword.length === 0) return { score: 0, label: '', color: '' };
@@ -120,21 +161,69 @@ export const ResetPasswordPage: React.FC = () => {
               <p className="text-xs text-slate-400">Verifying secure reset link...</p>
             </div>
           ) : !isValidToken ? (
-            <div className="text-center space-y-4 py-4">
-              <div className="w-12 h-12 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-[#12B8A6]/10 border border-[#12B8A6]/20 text-[#12B8A6] rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <h2 className="text-lg font-bold text-white">Enter 6-Digit OTP</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enter the 6-digit verification code sent to your email address to reset your password.
+                </p>
               </div>
-              <h2 className="text-lg font-bold text-white">Reset Link Expired or Invalid</h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                This password reset link has expired or has already been used. Please request a new link to reset your password.
-              </p>
-              <div className="pt-2">
+
+              <form className="space-y-4" onSubmit={handleVerifyOtp}>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Your Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                    placeholder="you@yourcompany.com"
+                    className="w-full px-3.5 py-2.5 text-sm bg-[#17283D] border border-[#1E3A56] rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#12B8A6] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    6-Digit Verification Code (OTP)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g. 849201"
+                    className="w-full px-3.5 py-2.5 text-center text-lg tracking-[6px] font-mono font-bold bg-[#17283D] border border-[#1E3A56] rounded-xl text-[#69E0D0] placeholder:tracking-normal placeholder:font-sans placeholder:text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#12B8A6] transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isVerifying || otpCode.length < 6}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[#12B8A6] to-[#0D9488] hover:from-[#0D9488] hover:to-[#0F766E] shadow-lg shadow-[#12B8A6]/20 transition-all disabled:opacity-50"
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying Code...</span>
+                    </>
+                  ) : (
+                    <span>Verify Code & Continue &rarr;</span>
+                  )}
+                </button>
+              </form>
+
+              <div className="pt-2 text-center border-t border-[#17283D]">
                 <Link
                   to="/forgot-password"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#12B8A6] hover:bg-[#0D9488] text-white font-semibold rounded-xl text-xs transition-colors"
+                  className="text-xs text-slate-400 hover:text-[#12B8A6] transition-colors"
                 >
-                  <span>Request New Reset Link</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  Didn't receive a code? Request new code
                 </Link>
               </div>
             </div>

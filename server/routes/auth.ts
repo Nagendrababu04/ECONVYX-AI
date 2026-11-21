@@ -171,55 +171,58 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       action: 'PASSWORD_RESET_REQUESTED',
       entityType: 'user',
       entityId: result.userId,
-      details: 'Password reset token generated. Valid for 1 hour.',
+      details: 'Password reset token & 6-digit OTP generated. Valid for 1 hour.',
     });
 
     const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
-    const fullResetUrl = `${clientUrl}/reset-password?token=${result.token}`;
-    sendPasswordResetEmail(email.trim().toLowerCase(), fullResetUrl).catch((err) => {
+    const fullResetUrl = `${clientUrl}/reset-password?token=${result.token}&email=${encodeURIComponent(email.trim().toLowerCase())}`;
+    sendPasswordResetEmail(email.trim().toLowerCase(), fullResetUrl, result.otp).catch((err) => {
       console.error('[Auth] Failed to dispatch password reset email:', err);
     });
   }
 
   return res.json({
-    message: 'If an account with that email exists, password reset instructions have been generated.',
-    resetUrl: result ? `/reset-password?token=${result.token}` : undefined,
+    message: 'If an account with that email exists, password reset instructions and a 6-digit OTP have been sent.',
+    resetUrl: result ? `/reset-password?token=${result.token}&email=${encodeURIComponent(email.trim().toLowerCase())}` : undefined,
     token: result ? result.token : undefined,
+    otp: process.env.NODE_ENV !== 'production' && result ? result.otp : undefined,
   });
 });
 
 // POST /api/auth/verify-reset-token
 router.post('/verify-reset-token', (req: Request, res: Response) => {
-  const { token } = req.body;
-  if (!token) {
-    return res.status(400).json({ error: 'Reset token is required.' });
+  const { token, otp, email } = req.body;
+  const lookupKey = token || otp;
+  if (!lookupKey) {
+    return res.status(400).json({ error: 'Reset token or 6-digit OTP is required.' });
   }
-  const record = db.verifyPasswordResetToken(token);
+  const record = db.verifyPasswordResetToken(lookupKey, email);
   if (!record) {
-    return res.status(400).json({ error: 'This password reset link is invalid or has expired.' });
+    return res.status(400).json({ error: 'Invalid or expired reset code. Please check and try again.' });
   }
-  return res.json({ valid: true, email: record.email });
+  return res.json({ valid: true, email: record.email, token: record.token });
 });
 
 // POST /api/auth/reset-password
 router.post('/reset-password', async (req: Request, res: Response) => {
-  const { token, newPassword } = req.body;
-  if (!token) {
-    return res.status(400).json({ error: 'Reset token is required.' });
+  const { token, otp, email, newPassword } = req.body;
+  const lookupKey = token || otp;
+  if (!lookupKey) {
+    return res.status(400).json({ error: 'Reset token or 6-digit OTP is required.' });
   }
   if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
   }
 
-  const record = db.verifyPasswordResetToken(token);
+  const record = db.verifyPasswordResetToken(lookupKey, email);
   if (!record) {
-    return res.status(400).json({ error: 'This password reset link is invalid or has expired.' });
+    return res.status(400).json({ error: 'This password reset code is invalid or has expired.' });
   }
 
   try {
     const passwordHash = await bcrypt.hash(newPassword, 12);
     db.updateUserPassword(record.userId, passwordHash);
-    db.usePasswordResetToken(token);
+    db.usePasswordResetToken(lookupKey);
 
     db.addAuditLog({
       workspaceId: 'global',
@@ -227,7 +230,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       action: 'PASSWORD_RESET_COMPLETED',
       entityType: 'user',
       entityId: record.userId,
-      details: 'Password successfully reset using secure token.',
+      details: 'Password successfully reset using secure 6-digit OTP/token.',
     });
 
     return res.json({ message: 'Password has been successfully reset. Please sign in with your new password.' });
