@@ -74,6 +74,12 @@ class DatabaseManager {
    * Must be called (and awaited) before the server starts accepting requests.
    */
   public async init(): Promise<void> {
+    // Skip Supabase initialization during automated tests to avoid network calls
+    if (process.env.NODE_ENV === 'test') {
+      this.useSupabase = false;
+      console.log('[Database] Test environment – using local JSON store only.');
+      return;
+    }
     if (!this.useSupabase) {
       console.log('[Database] Using local JSON file persistence.');
       return;
