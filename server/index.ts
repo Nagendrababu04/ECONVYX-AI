@@ -43,18 +43,34 @@ const distPath = fs.existsSync(path.resolve(process.cwd(), 'dist', 'index.html')
   ? path.resolve(process.cwd(), 'dist')
   : path.resolve(__dirname, '..');
 
-// 1. Static Assets & Frontend Files (served before API middlewares and separate from API CORS)
-// Fingerprinted static assets under /assets: immutable caching and permissive CORS
+// Trust proxy when behind reverse proxy (e.g., Render, Vercel)
+app.set('trust proxy', 1);
+
+// Session configuration (production‑ready). In development you can keep the default MemoryStore,
+// but for a real deployment you should replace it with a persistent store (e.g., connect‑pg‑simple,
+// Redis, etc.). The cookie is configured for a 30‑minute lifespan and uses secure flags in production.
+app.use(
+  session({
+    name: 'econvyx.sid',
+    secret: process.env.SESSION_SECRET || 'change-this-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // only over HTTPS in prod
+      sameSite: 'strict',
+      maxAge: 30 * 60 * 1000, // 30 minutes
+    },
+  })
+);
+
+
+// Serve fingerprinted assets from dist/assets; return 404 for missing assets (never SPA fallback)
 app.use('/assets', express.static(path.join(distPath, 'assets'), {
   maxAge: '1y',
   immutable: true,
-  setHeaders(res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  },
 }));
-
-// Any asset request under /assets not found on disk returns 404 (never HTML fallback)
-app.use('/assets', (req, res) => {
+app.use('/assets', (_req, res) => {
   res.status(404).type('text/plain').send('Asset not found');
 });
 

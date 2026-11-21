@@ -63,7 +63,12 @@ class DatabaseManager {
   constructor() {
     this.ensureDirectory();
     this.data = this.loadData();
-    this.useSupabase = isSupabaseConfigured();
+    // Disable Supabase in test environment regardless of env vars
+    if (process.env.NODE_ENV === 'test') {
+      this.useSupabase = false;
+    } else {
+      this.useSupabase = isSupabaseConfigured();
+    }
     if (this.data.businessWorkspaces.length === 0 && !this.useSupabase) {
       this.seedApexDemoWorkspace();
     }
@@ -185,6 +190,10 @@ class DatabaseManager {
     }
 
     // Async persist to Supabase (fire-and-forget, non-blocking)
+    // Skip Supabase sync in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
     if (this.useSupabase && !this.supabaseSaveQueued) {
       this.supabaseSaveQueued = true;
       setTimeout(() => {
