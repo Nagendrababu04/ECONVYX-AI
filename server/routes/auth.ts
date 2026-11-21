@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../db/database.js';
 import { User } from '../types/index.js';
 import { JWT_SECRET } from '../config.js';
+import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/emailService.js';
 
 const router = Router();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -171,6 +172,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       entityType: 'user',
       entityId: result.userId,
       details: 'Password reset token generated. Valid for 1 hour.',
+    });
+
+    const clientUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get('host')}`;
+    const fullResetUrl = `${clientUrl}/reset-password?token=${result.token}`;
+    sendPasswordResetEmail(email.trim().toLowerCase(), fullResetUrl).catch((err) => {
+      console.error('[Auth] Failed to dispatch password reset email:', err);
     });
   }
 
